@@ -81,10 +81,10 @@ func (s *PebbleDHStore) PutMetadata(hvk HashedValueKey, em EncryptedMetadata) er
 func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]EncryptedValueKey, error) {
 	dmh, err := multihash.Decode(mh)
 	if err != nil {
-		return nil, err
+		return nil, ErrMultihashDecode{err: err, mh: mh}
 	}
 	if dmh.Code != multihash.DBL_SHA2_256 {
-		return nil, errors.New("multihash key must be of code multicodec.DblSha2_256")
+		return nil, ErrUnsupportedMulticodecCode{code: multicodec.Code(dmh.Code)}
 	}
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
@@ -95,11 +95,11 @@ func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]EncryptedValueKey, err
 
 	vkb, vkbClose, err := s.db.Get(mhk.buf)
 	_ = mhk.Close()
-	if err == pebble.ErrNotFound {
-		return nil, nil
-	}
 	if err != nil {
-		log.Debugw("cannot find multihash", "key", mh.B58String(), "err", err)
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
+		log.Debugw("failed to find multihash", "key", mh.B58String(), "err", err)
 		return nil, err
 	}
 	defer vkbClose.Close()
@@ -117,6 +117,9 @@ func (s *PebbleDHStore) GetMetadata(hvk HashedValueKey) (EncryptedMetadata, erro
 	emb, emClose, err := s.db.Get(hvkk.buf)
 	_ = hvkk.Close()
 	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
