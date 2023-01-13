@@ -5,13 +5,13 @@ import (
 )
 
 type (
-	EncryptedIndexKey []byte
+	EncryptedValueKey []byte
 	EncryptedMetadata []byte
-	HashedIndexKey    []byte
+	HashedValueKey    []byte
 	DHStore           interface {
-		MergeIndex(multihash.Multihash, EncryptedIndexKey) error
-		PutMetadata(HashedIndexKey, EncryptedMetadata) error
-		Lookup(multihash.Multihash) ([]EncryptedIndexKey, error)
-		GetMetadata(HashedIndexKey) (EncryptedMetadata, error)
+		MergeIndex(multihash.Multihash, EncryptedValueKey) error
+		PutMetadata(HashedValueKey, EncryptedMetadata) error
+		Lookup(multihash.Multihash) ([]EncryptedValueKey, error)
+		GetMetadata(HashedValueKey) (EncryptedMetadata, error)
 	}
 )
