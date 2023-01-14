@@ -18,11 +18,14 @@ type (
 )
 
 func (e ErrUnsupportedMulticodecCode) Error() string {
-	return fmt.Sprintf("multihash must be of code multihash.DBL_SHA2_256, got: %s", e.code.String())
+	return fmt.Sprintf("multihash must be of code dbl-sha2-256, got: %s", e.code.String())
 }
 
 func (e ErrMultihashDecode) Error() string {
-	return fmt.Sprintf("failed to decode multihash %s: %s", e.mh.B58String(), e.err.Error())
+	if e.err != nil {
+		return fmt.Sprintf("failed to decode multihash %s: %s", e.mh.B58String(), e.err.Error())
+	}
+	return fmt.Sprintf("failed to decode multihash %s", e.mh.B58String())
 }
 
 func (e ErrMultihashDecode) Unwrap() error {

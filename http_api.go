@@ -4,10 +4,11 @@ import "github.com/multiformats/go-multihash"
 
 type (
 	MergeIndexRequest struct {
-		Merges []struct {
-			Key   multihash.Multihash `json:"key"`
-			Value EncryptedValueKey   `json:"value"`
-		} `json:"merges"`
+		Merges []Merge `json:"merges"`
+	}
+	Merge struct {
+		Key   multihash.Multihash `json:"key"`
+		Value EncryptedValueKey   `json:"value"`
 	}
 	PutMetadataRequest struct {
 		Key   HashedValueKey    `json:"key"`
