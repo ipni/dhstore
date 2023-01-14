@@ -51,10 +51,10 @@ func NewPebbleDHStore(path string, opts *pebble.Options) (*PebbleDHStore, error)
 func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk EncryptedValueKey) error {
 	dmh, err := multihash.Decode(mh)
 	if err != nil {
-		return err
+		return ErrMultihashDecode{err: err, mh: mh}
 	}
 	if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
-		return errors.New("multihash key must be of code multicodec.DblSha2_256")
+		return ErrUnsupportedMulticodecCode{code: multicodec.Code(dmh.Code)}
 	}
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()

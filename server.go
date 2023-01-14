@@ -1,9 +1,11 @@
 package dhstore
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -12,16 +14,16 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-type server struct {
+type Server struct {
 	s   *http.Server
 	dhs DHStore
 }
 
-func newHttpServer(dhs DHStore, addr string) (*server, error) {
-	var dhss server
+func NewHttpServer(dhs DHStore, addr string) (*Server, error) {
+	var dhss Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/multihash", dhss.handleMh)
-	mux.HandleFunc("/metadata", dhss.handleMetadata)
+	mux.HandleFunc("/multihash/", dhss.handleMh)
+	mux.HandleFunc("/metadata/", dhss.handleMetadata)
 	dhss.s = &http.Server{
 		Addr:    addr,
 		Handler: mux,
@@ -30,7 +32,21 @@ func newHttpServer(dhs DHStore, addr string) (*server, error) {
 	return &dhss, nil
 }
 
-func (s *server) handleMh(w http.ResponseWriter, r *http.Request) {
+func (s *Server) Start(_ context.Context) error {
+	ln, err := net.Listen("tcp", s.s.Addr)
+	if err != nil {
+		return err
+	}
+	go func() { _ = s.s.Serve(ln) }()
+	log.Infow("Server started", "addr", ln.Addr())
+	return nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.s.Shutdown(ctx)
+}
+
+func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		s.handlePutMh(w, r)
@@ -43,7 +59,7 @@ func (s *server) handleMh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *server) handlePutMh(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePutMh(w http.ResponseWriter, r *http.Request) {
 	var mir MergeIndexRequest
 	err := json.NewDecoder(r.Body).Decode(&mir)
 	_ = r.Body.Close()
@@ -63,7 +79,7 @@ func (s *server) handlePutMh(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (s *server) handleGetMh(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(io.Discard, r.Body)
 	_ = r.Body.Close()
 
@@ -102,7 +118,7 @@ func (s *server) handleGetMh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *server) handleMetadata(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		s.handlePutMetadata(w, r)
@@ -115,7 +131,7 @@ func (s *server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 	var pmr PutMetadataRequest
 	err := json.NewDecoder(r.Body).Decode(&pmr)
 	_ = r.Body.Close()
@@ -130,7 +146,7 @@ func (s *server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (s *server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(io.Discard, r.Body)
 	_ = r.Body.Close()
 
