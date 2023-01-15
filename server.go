@@ -21,15 +21,28 @@ type Server struct {
 
 func NewHttpServer(dhs DHStore, addr string) (*Server, error) {
 	var dhss Server
-	mux := http.NewServeMux()
-	mux.HandleFunc("/multihash/", dhss.handleMh)
-	mux.HandleFunc("/metadata/", dhss.handleMetadata)
 	dhss.s = &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: dhss.serveMux(),
 	}
 	dhss.dhs = dhs
 	return &dhss, nil
+}
+
+func NewHttpServeMux(dhs DHStore) *http.ServeMux {
+	s := &Server{
+		dhs: dhs,
+	}
+	return s.serveMux()
+}
+
+func (s *Server) serveMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/multihash", s.handleMh)
+	mux.HandleFunc("/multihash/", s.handleMhSubtree)
+	mux.HandleFunc("/metadata/", s.handleMetadata)
+	mux.HandleFunc("/", s.handleCatchAll)
+	return mux
 }
 
 func (s *Server) Start(_ context.Context) error {
@@ -49,30 +62,40 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMh(w, r)
-	case http.MethodGet:
-		s.handleGetMh(w, r)
+		s.handlePutMhs(w, r)
 	default:
-		_, _ = io.Copy(io.Discard, r.Body)
-		_ = r.Body.Close()
+		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
 	}
 }
 
-func (s *Server) handlePutMh(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.handleGetMh(w, r)
+	default:
+		discardBody(r)
+		http.Error(w, "", http.StatusNotFound)
+	}
+}
+
+func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 	var mir MergeIndexRequest
 	err := json.NewDecoder(r.Body).Decode(&mir)
-	_ = r.Body.Close()
+	discardBody(r)
 	if err != nil {
 		http.Error(w, "", http.StatusBadRequest)
 		return
+	}
+	if len(mir.Merges) == 0 {
+		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
 	}
 
 	// TODO: Use pebble batch which will require interface changes.
 	//       But no big deal for now because every write to pebble is by NoSync.
 	for _, merge := range mir.Merges {
 		if err := s.dhs.MergeIndex(merge.Key, merge.Value); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			s.handleError(w, err)
 			return
 		}
 	}
@@ -80,8 +103,7 @@ func (s *Server) handlePutMh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
-	_, _ = io.Copy(io.Discard, r.Body)
-	_ = r.Body.Close()
+	discardBody(r)
 
 	smh := strings.TrimPrefix(path.Base(r.URL.Path), "multihash/")
 	mh, err := multihash.FromB58String(smh)
@@ -91,14 +113,7 @@ func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
 	}
 	evks, err := s.dhs.Lookup(mh)
 	if err != nil {
-		var status int
-		switch err.(type) {
-		case ErrUnsupportedMulticodecCode, ErrMultihashDecode:
-			status = http.StatusBadRequest
-		default:
-			status = http.StatusInternalServerError
-		}
-		http.Error(w, err.Error(), status)
+		s.handleError(w, err)
 		return
 	}
 	if len(evks) == 0 {
@@ -118,6 +133,17 @@ func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) handleError(w http.ResponseWriter, err error) {
+	var status int
+	switch err.(type) {
+	case ErrUnsupportedMulticodecCode, ErrMultihashDecode:
+		status = http.StatusBadRequest
+	default:
+		status = http.StatusInternalServerError
+	}
+	http.Error(w, err.Error(), status)
+}
+
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
@@ -125,8 +151,7 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		s.handleGetMetadata(w, r)
 	default:
-		_, _ = io.Copy(io.Discard, r.Body)
-		_ = r.Body.Close()
+		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
 	}
 }
@@ -134,7 +159,7 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 	var pmr PutMetadataRequest
 	err := json.NewDecoder(r.Body).Decode(&pmr)
-	_ = r.Body.Close()
+	discardBody(r)
 	if err != nil {
 		http.Error(w, "", http.StatusBadRequest)
 		return
@@ -147,8 +172,7 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	_, _ = io.Copy(io.Discard, r.Body)
-	_ = r.Body.Close()
+	discardBody(r)
 
 	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
 	b, err := base58.Decode(sk)
@@ -172,4 +196,14 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(gmr); err != nil {
 		log.Errorw("Failed to write get metadata response", "err", err, "key", sk)
 	}
+}
+
+func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
+	discardBody(r)
+	http.Error(w, "", http.StatusNotFound)
+}
+
+func discardBody(r *http.Request) {
+	_, _ = io.Copy(io.Discard, r.Body)
+	_ = r.Body.Close()
 }

@@ -2,6 +2,7 @@ package dhstore
 
 import (
 	"errors"
+	"io"
 
 	"github.com/cockroachdb/pebble"
 	logging "github.com/ipfs/go-log/v2"
@@ -63,7 +64,12 @@ func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk EncryptedValueKey
 		return err
 	}
 	defer mhk.Close()
-	return s.db.Merge(mhk.buf, evk, pebble.NoSync)
+	mevk, closer, err := s.marshalEncryptedIndexKey(evk)
+	if err != nil {
+		return err
+	}
+	defer closer.Close()
+	return s.db.Merge(mhk.buf, mevk, pebble.NoSync)
 }
 
 func (s *PebbleDHStore) PutMetadata(hvk HashedValueKey, em EncryptedMetadata) error {
@@ -151,6 +157,12 @@ func (s *PebbleDHStore) Close() error {
 		return cerr
 	}
 	return ferr
+}
+
+func (s *PebbleDHStore) marshalEncryptedIndexKey(evk EncryptedValueKey) ([]byte, io.Closer, error) {
+	buf := s.p.leaseSectionBuff()
+	buf.writeSection(evk)
+	return buf.buf, buf, nil
 }
 
 func (s *PebbleDHStore) unmarshalEncryptedIndexKeys(b []byte) ([]EncryptedValueKey, error) {

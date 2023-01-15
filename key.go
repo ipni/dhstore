@@ -31,7 +31,7 @@ type (
 
 const (
 	// unknownKeyPrefix signals an unknown key prefix.
-	unknownKeyPrefix keyPrefix = iota
+	unknownKeyPrefix keyPrefix = iota //lint:ignore U1000 - iota
 	// multihashKeyPrefix represents the prefix of a key that represent a multihash.
 	multihashKeyPrefix
 	// hashedValueKeyKeyPrefix represents the prefix of a key that is associated to hashed value-key
