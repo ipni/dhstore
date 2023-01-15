@@ -31,7 +31,7 @@ func newDeletableDefaultMerger() *pebble.Merger {
 				v := &deletableDefaultMerger{
 					def: merge,
 				}
-				return v, v.MergeNewer(value)
+				return v, nil
 			default:
 				return pebble.DefaultMerger.Merge(k, value)
 			}
