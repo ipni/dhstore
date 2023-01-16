@@ -123,8 +123,8 @@ func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
 	lr := LookupResponse{
 		EncryptedMultihashResults: []EncryptedMultihashResult{
 			{
-				Multihash:                mh,
-				EncryptedProviderResults: evks,
+				Multihash:          mh,
+				EncryptedValueKeys: evks,
 			},
 		},
 	}
