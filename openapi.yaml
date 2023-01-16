@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+  title: dhstore HTTP API
+  description: dhstore HTTP API
+  version: 0.0.1
+servers:
+  - url: 'http://localhost:40080'
+paths:
+  /multihash:
+    put:
+      description: Merges one or more double-hashed multihash and encrypted index value key pairs.
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            example:
+              merges:
+                - key: "ViAJKqT0hRtxENbtjWwvnRogQknxUnhswNrose3ZjEP8Iw=="
+                - value: "ZmlzaA=="
+            schema:
+              type: object
+              properties:
+                merges:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                        description: base64 encoded multihash
+                      value:
+                        type: string
+                        description: base64 encoded encrypted index value keys.
+      responses:
+        '202':
+          description: Request to merge values is accepted and will eventually be persisted.
+        '400':
+          description: The given request is not valid.
+          content:
+            text/plain: { }
+        '500':
+          description: Failure occurred while processing the request.
+          content:
+            text/plain: { }
+  /multihash/{multihash}:
+    get:
+      description: Find encrypted values that correspond to a multihash with could dbl-sha2-256
+      parameters:
+        - name: multihash
+          in: path
+          description: The base58 string representation of multihash. Must be a dbl-sha2-256 multihash.
+          required: true
+      responses:
+        '200':
+          description: Given multihash and a list of encrypted values associated to it.
+          content:
+            'application/json':
+              schema:
+                type: object
+                properties:
+                  EncryptedMultihashResults:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        Multihash:
+                          type: string
+                          description: base58 string representation of queried multihash
+                        EncryptedProviderResults:
+                          type: array
+                          items:
+                            type: string
+                            description: base64 encoded encrypted index value keys.
+        '400':
+          description: The given request is not valid.
+          content:
+            text/plain: { }
+        '404':
+          description: No encrypted index value keys found for the given multihash.
+        '500':
+          description: Failure occurred while processing the request.
+          content:
+            text/plain: { }
+  /metadata/{key}:
+    parameters:
+      - name: key
+        in: path
+        description: The base58 string representation of key associated to the encrypted IPNI Metadata.
+        required: true
+    get:
+      description: Find encrypted IPNI Metadata corresponding to the given key.
+      responses:
+        '200':
+          description: The encrypted IPNI Metadata.
+          content:
+            'application/json':
+              schema:
+                type: object
+                properties:
+                  EncryptedMetadata:
+                    type: string
+                    description: base64 encoded encrypted IPNI Metadata.
+        '400':
+          description: The given request is not valid.
+          content:
+            text/plain: { }
+        '404':
+          description: No encrypted IPNI Metadata is associated to the given key.
+        '500':
+          description: Failure occurred while processing the request.
+          content:
+            text/plain: { }
+    put:
+      description: Stores encrypted IPNI Metadata associated to the given key.
+      requestBody:
+        required: true
+        content:
+          'application/json':
+            schema:
+              type: object
+              properties:
+                EncryptedMetadata:
+                  type: string
+                  description: The encrypted IPNI Metadata as base64 encoded string.
+      responses:
+        '202':
+          description: Request is accepted and will eventually be persisted.
+        '400':
+          description: The given request is not valid.
+          content:
+            text/plain: { }
+        '500':
+          description: Failure occurred while processing the request.
+          content:
+            text/plain: { }
+  
