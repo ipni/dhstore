@@ -18,8 +18,8 @@ type (
 		EncryptedMultihashResults []EncryptedMultihashResult `json:"EncryptedMultihashResult"`
 	}
 	EncryptedMultihashResult struct {
-		Multihash                multihash.Multihash `json:"Multihash"`
-		EncryptedProviderResults []EncryptedValueKey `json:"EncryptedProviderResults"`
+		Multihash          multihash.Multihash `json:"Multihash"`
+		EncryptedValueKeys []EncryptedValueKey `json:"EncryptedValueKeys"`
 	}
 	GetMetadataResponse struct {
 		EncryptedMetadata EncryptedMetadata `json:"EncryptedMetadata"`
