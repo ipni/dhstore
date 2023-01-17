@@ -30,23 +30,24 @@ type PebbleDHStore struct {
 // NewPebbleDHStore instantiates a new instance of a store backed by Pebble.
 // Note that any Merger value specified in the given options will be overridden.
 func NewPebbleDHStore(path string, opts *pebble.Options) (*PebbleDHStore, error) {
-	p := newPool()
+	dhs := &PebbleDHStore{
+		p: newPool(),
+	}
+
 	if opts == nil {
 		opts = &pebble.Options{}
 	}
 	opts.EnsureDefaults()
 	// Override Merger since the store relies on a specific implementation of it
-	// to handle read-free writing of value-keys; see: deletableDefaultMerger.
-	opts.Merger = newDeletableDefaultMerger()
+	// to handle read-free writing of value-keys; see: valueKeysValueMerger.
+	opts.Merger = dhs.newValueKeysMerger()
 	db, err := pebble.Open(path, opts)
 	if err != nil {
 		return nil, err
 	}
+	dhs.db = db
 
-	return &PebbleDHStore{
-		db: db,
-		p:  p,
-	}, nil
+	return dhs, nil
 }
 
 func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk EncryptedValueKey) error {
