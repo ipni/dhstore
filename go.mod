@@ -1,6 +1,6 @@
 module github.com/ipni/dhstore
 
-go 1.19
+go 1.18
 
 require (
 	github.com/cockroachdb/pebble v0.0.0-20220726144858-a78491c0086f
