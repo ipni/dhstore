@@ -9,17 +9,20 @@ import (
 	"testing"
 
 	"github.com/ipni/dhstore"
+	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewHttpServeMux(t *testing.T) {
 	tests := []struct {
 		name         string
+		onStore      func(*testing.T, dhstore.DHStore)
 		onMethod     string
 		onTarget     string
 		onBody       string
 		expectStatus int
 		expectBody   string
+		expectJSON   bool
 	}{
 		{
 			name:         "GET /multihash is 404",
@@ -117,12 +120,28 @@ func TestNewHttpServeMux(t *testing.T) {
 			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
 			expectStatus: http.StatusNotFound,
 		},
+		{
+			name: "GET /multihash/subtree with valid present dbl-sha2-256 multihash is 200",
+			onStore: func(t *testing.T, store dhstore.DHStore) {
+				mh, err := multihash.FromB58String("2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82")
+				require.NoError(t, err)
+				require.NoError(t, store.MergeIndex(mh, []byte("fish")))
+			},
+			onMethod:     http.MethodGet,
+			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
+			expectStatus: http.StatusOK,
+			expectBody:   `{"EncryptedMultihashResults": [{ "Multihash": "ViAJKqT0hRtxENbtjWwvnRogQknxUnhswNrose3ZjEP8Iw==", "EncryptedValueKeys": ["ZmlzaA=="] }]}`,
+			expectJSON:   true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			store, err := dhstore.NewPebbleDHStore(t.TempDir(), nil)
 			require.NoError(t, err)
 			defer store.Close()
+			if test.onStore != nil {
+				test.onStore(t, store)
+			}
 			subject := dhstore.NewHttpServeMux(store)
 
 			given := httptest.NewRequest(test.onMethod, test.onTarget, bytes.NewBufferString(test.onBody))
@@ -132,7 +151,11 @@ func TestNewHttpServeMux(t *testing.T) {
 
 			gotBody, err := io.ReadAll(got.Body)
 			require.NoError(t, err)
-			require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+			if test.expectJSON {
+				require.JSONEq(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+			} else {
+				require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+			}
 		})
 	}
 }

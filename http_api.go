@@ -15,7 +15,7 @@ type (
 		Value EncryptedMetadata `json:"value"`
 	}
 	LookupResponse struct {
-		EncryptedMultihashResults []EncryptedMultihashResult `json:"EncryptedMultihashResult"`
+		EncryptedMultihashResults []EncryptedMultihashResult `json:"EncryptedMultihashResults"`
 	}
 	EncryptedMultihashResult struct {
 		Multihash          multihash.Multihash `json:"Multihash"`
