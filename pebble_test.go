@@ -33,6 +33,8 @@ func TestPebbleDHStore_MultihashCheck(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			subject, err := dhstore.NewPebbleDHStore(t.TempDir(), nil)
 			require.NoError(t, err)
+			defer subject.Close()
+
 			err = subject.MergeIndex(test.givenMh, someValue)
 			require.Error(t, err)
 			require.IsType(t, test.wantErrType, err)

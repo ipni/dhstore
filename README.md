@@ -1,6 +1,6 @@
 # :lock_with_ink_pen: `dhstore`
 
-[![Build](https://github.com/ipni/dhstore/actions/workflows/test.yml/badge.svg)](https://github.com/ipni/dhstore/actions/workflows/test.yml)
+[![Go Test](https://github.com/ipni/dhstore/actions/workflows/go-test.yml/badge.svg)](https://github.com/ipni/dhstore/actions/workflows/go-test.yml)
 
 A Service to store double hashed indexed records with their corresponding encrypted values backed by
 Pebble key-value store according to
