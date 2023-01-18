@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dhstore
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: dhstore
+  template:
+    metadata:
+      labels:
+        app: dhstore
+    spec:
+      containers:
+        - name: dhstore
+          image: dhstore
+          envFrom:
+            - configMapRef:
+                name: dhstore-env-vars
+          ports:
+            - containerPort: 40080
+              name: http
+          readinessProbe:
+            httpGet:
+              port: http
+              path: /ready
+            initialDelaySeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 5
+            periodSeconds: 10

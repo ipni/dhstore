@@ -41,6 +41,7 @@ func (s *Server) serveMux() *http.ServeMux {
 	mux.HandleFunc("/multihash", s.handleMh)
 	mux.HandleFunc("/multihash/", s.handleMhSubtree)
 	mux.HandleFunc("/metadata/", s.handleMetadata)
+	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/", s.handleCatchAll)
 	return mux
 }
@@ -195,6 +196,16 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewEncoder(w).Encode(gmr); err != nil {
 		log.Errorw("Failed to write get metadata response", "err", err, "key", sk)
+	}
+}
+
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	discardBody(r)
+	switch r.Method {
+	case http.MethodGet:
+		w.WriteHeader(http.StatusOK)
+	default:
+		http.Error(w, "", http.StatusNotFound)
 	}
 }
 

@@ -1,0 +1,11 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: dhstore
+  labels:
+    app: dhstore
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: dhstore
