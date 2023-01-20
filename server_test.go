@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ipni/dhstore"
+	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
@@ -131,6 +132,28 @@ func TestNewHttpServeMux(t *testing.T) {
 			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
 			expectStatus: http.StatusOK,
 			expectBody:   `{"EncryptedMultihashResults": [{ "Multihash": "ViAJKqT0hRtxENbtjWwvnRogQknxUnhswNrose3ZjEP8Iw==", "EncryptedValueKeys": ["ZmlzaA=="] }]}`,
+			expectJSON:   true,
+		},
+		{
+			name:         "PUT /metadata with valid key value is 202",
+			onMethod:     http.MethodPut,
+			onBody:       `{"key": "ZmlzaA==", "value": "ZmlzaA==" }`,
+			onTarget:     "/metadata",
+			expectStatus: http.StatusAccepted,
+		},
+		{
+			name: "GET /metadata with existing key is 200",
+			onStore: func(t *testing.T, store dhstore.DHStore) {
+				key := []byte("fish")
+				err := store.PutMetadata(key, []byte("lobster"))
+				require.NoError(t, err)
+				t.Logf("metadata with key %s stored", base58.Encode(key))
+			},
+			onMethod:     http.MethodGet,
+			onBody:       `{"key": "ZmlzaA==", "value": "ZmlzaA==" }`,
+			onTarget:     "/metadata/3cqA6K",
+			expectStatus: http.StatusOK,
+			expectBody:   `{"EncryptedMetadata":"bG9ic3Rlcg=="}`,
 			expectJSON:   true,
 		},
 	}
