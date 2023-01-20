@@ -40,7 +40,7 @@ func (s *Server) serveMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/multihash", s.handleMh)
 	mux.HandleFunc("/multihash/", s.handleMhSubtree)
-	mux.HandleFunc("/metadata/", s.handleMetadata)
+	mux.HandleFunc("/metadata", s.handleMetadata)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/", s.handleCatchAll)
 	return mux
