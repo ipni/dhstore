@@ -41,6 +41,7 @@ func (s *Server) serveMux() *http.ServeMux {
 	mux.HandleFunc("/multihash", s.handleMh)
 	mux.HandleFunc("/multihash/", s.handleMhSubtree)
 	mux.HandleFunc("/metadata", s.handleMetadata)
+	mux.HandleFunc("/metadata/", s.handleMetadataSubtree)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/", s.handleCatchAll)
 	return mux
@@ -153,8 +154,6 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		s.handlePutMetadata(w, r)
-	case http.MethodGet:
-		s.handleGetMetadata(w, r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -174,6 +173,16 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.handleGetMetadata(w, r)
+	default:
+		discardBody(r)
+		http.Error(w, "", http.StatusNotFound)
+	}
 }
 
 func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
