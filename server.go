@@ -100,6 +100,10 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	log.Infow("Finished putting multihashes", "count", len(mir.Merges))
+	if len(mir.Merges) != 0 {
+		log.Infow("Multihash to try out", "mh", mir.Merges[0].Key.B58String())
+	}
 	w.WriteHeader(http.StatusAccepted)
 }
 
