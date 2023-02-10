@@ -12,6 +12,7 @@ import (
 	"github.com/cockroachdb/pebble/bloom"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
+	"github.com/ipni/dhstore/metrics"
 )
 
 var (
@@ -21,6 +22,7 @@ var (
 func main() {
 	storePath := flag.String("storePath", "./dhstore/store", "The path at which the dhstore data persisted.")
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
+	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrcis HTTP server listen address.")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	flag.Parse()
@@ -71,14 +73,24 @@ func main() {
 	}
 	log.Infow("Store opened.", "path", path)
 
-	server, err := dhstore.NewHttpServer(store, *listenAddr)
+	m, err := metrics.New(*metrcisAddr)
 	if err != nil {
 		panic(err)
 	}
+
+	server, err := dhstore.NewHttpServer(store, m, *listenAddr)
+	if err != nil {
+		panic(err)
+	}
+
 	ctx := context.Background()
 	if err := server.Start(ctx); err != nil {
 		panic(err)
 	}
+	if err := m.Start(ctx); err != nil {
+		panic(err)
+	}
+
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
@@ -88,6 +100,12 @@ func main() {
 	} else {
 		log.Info("Shut down server successfully.")
 	}
+	if err := m.Shutdown(ctx); err != nil {
+		log.Warnw("Failure occurred while shutting down metrics server.", "err", err)
+	} else {
+		log.Info("Shut down metrcis server successfully.")
+	}
+
 	if err := store.Close(); err != nil {
 		log.Warnw("Failure occurred while closing store.", "err", err)
 	} else {
