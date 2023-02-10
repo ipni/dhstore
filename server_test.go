@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/ipni/dhstore"
+	"github.com/ipni/dhstore/metrics"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
@@ -165,7 +166,10 @@ func TestNewHttpServeMux(t *testing.T) {
 			if test.onStore != nil {
 				test.onStore(t, store)
 			}
-			subject := dhstore.NewHttpServeMux(store)
+			m, err := metrics.New("0.0.0.0:40081")
+			require.NoError(t, err)
+
+			subject := dhstore.NewHttpServeMux(store, m)
 
 			given := httptest.NewRequest(test.onMethod, test.onTarget, bytes.NewBufferString(test.onBody))
 			got := httptest.NewRecorder()
