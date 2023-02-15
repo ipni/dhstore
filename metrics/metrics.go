@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/prometheus"
 	"go.opentelemetry.io/otel/metric/instrument"
 	"go.opentelemetry.io/otel/metric/instrument/syncint64"
+	"go.opentelemetry.io/otel/metric/unit"
 	"go.opentelemetry.io/otel/sdk/metric"
 )
 
@@ -40,7 +41,7 @@ func New(metricsAddr string) (*Metrics, error) {
 	meter := provider.Meter("ipni/dhstore")
 
 	if m.httpLatency, err = meter.SyncInt64().Histogram("ipni/dhstore/http_latency",
-		instrument.WithUnit("milliseconds"),
+		instrument.WithUnit(unit.Milliseconds),
 		instrument.WithDescription("Latency of DHStore HTTP API")); err != nil {
 		return nil, err
 	}
