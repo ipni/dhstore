@@ -30,6 +30,14 @@ type responseWirterWithStatus struct {
 	status int
 }
 
+func newResponseWriterWithStatus(w http.ResponseWriter) *responseWirterWithStatus {
+	return &responseWirterWithStatus{
+		ResponseWriter: w,
+		// 200 status should be assumed by default if WriteHeader hasn't been called explicitly https://pkg.go.dev/net/http#ResponseWriter
+		status: 200,
+	}
+}
+
 func (rec *responseWirterWithStatus) WriteHeader(code int) {
 	rec.status = code
 	rec.ResponseWriter.WriteHeader(code)
@@ -84,9 +92,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMhs(&responseWirterWithStatus{
-			ResponseWriter: w,
-		}, r)
+		s.handlePutMhs(newResponseWriterWithStatus(w), r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -96,9 +102,7 @@ func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetMh(&responseWirterWithStatus{
-			ResponseWriter: w,
-		}, r)
+		s.handleGetMh(newResponseWriterWithStatus(w), r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -189,9 +193,7 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMetadata(&responseWirterWithStatus{
-			ResponseWriter: w,
-		}, r)
+		s.handlePutMetadata(newResponseWriterWithStatus(w), r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -222,9 +224,7 @@ func (s *Server) handlePutMetadata(w *responseWirterWithStatus, r *http.Request)
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetMetadata(&responseWirterWithStatus{
-			ResponseWriter: w,
-		}, r)
+		s.handleGetMetadata(newResponseWriterWithStatus(w), r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
