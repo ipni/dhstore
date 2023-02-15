@@ -21,17 +21,13 @@ var (
 )
 
 type Metrics struct {
-	exporter *prometheus.Exporter
-
+	exporter    *prometheus.Exporter
 	httpLatency syncint64.Histogram
-
-	s *http.Server
+	s           *http.Server
 }
 
 func New(metricsAddr string) (*Metrics, error) {
-
 	var m Metrics
-
 	var err error
 	if m.exporter, err = prometheus.New(prometheus.WithoutUnits()); err != nil {
 		return nil, err

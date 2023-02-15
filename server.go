@@ -22,23 +22,22 @@ type Server struct {
 	dhs DHStore
 }
 
-// responseWirterWithStatus is required to capture status code from ResponseWriter so that it can be reported
+// responseWriterWithStatus is required to capture status code from ResponseWriter so that it can be reported
 // to metrics in a unified way
-type responseWirterWithStatus struct {
+type responseWriterWithStatus struct {
 	http.ResponseWriter
-
 	status int
 }
 
-func newResponseWriterWithStatus(w http.ResponseWriter) *responseWirterWithStatus {
-	return &responseWirterWithStatus{
+func newResponseWriterWithStatus(w http.ResponseWriter) *responseWriterWithStatus {
+	return &responseWriterWithStatus{
 		ResponseWriter: w,
 		// 200 status should be assumed by default if WriteHeader hasn't been called explicitly https://pkg.go.dev/net/http#ResponseWriter
 		status: 200,
 	}
 }
 
-func (rec *responseWirterWithStatus) WriteHeader(code int) {
+func (rec *responseWriterWithStatus) WriteHeader(code int) {
 	rec.status = code
 	rec.ResponseWriter.WriteHeader(code)
 }
@@ -90,9 +89,12 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	ws := newResponseWriterWithStatus(w)
+	defer s.reportLatency(start, ws.status, r.Method, "multihash")
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMhs(newResponseWriterWithStatus(w), r)
+		s.handlePutMhs(ws, r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -100,22 +102,19 @@ func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	ws := newResponseWriterWithStatus(w)
+	defer s.reportLatency(start, ws.status, r.Method, "multihash")
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetMh(newResponseWriterWithStatus(w), r)
+		s.handleGetMh(ws, r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
 	}
 }
 
-func (s *Server) handlePutMhs(w *responseWirterWithStatus, r *http.Request) {
-	start := time.Now()
-
-	defer func() {
-		s.m.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "multihash", w.status)
-	}()
-
+func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 	var mir MergeIndexRequest
 	err := json.NewDecoder(r.Body).Decode(&mir)
 	discardBody(r)
@@ -142,15 +141,8 @@ func (s *Server) handlePutMhs(w *responseWirterWithStatus, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (s *Server) handleGetMh(w *responseWirterWithStatus, r *http.Request) {
-	start := time.Now()
-
-	defer func() {
-		s.m.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "multihash", w.status)
-	}()
-
+func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
 	discardBody(r)
-
 	smh := strings.TrimPrefix(path.Base(r.URL.Path), "multihash/")
 	mh, err := multihash.FromB58String(smh)
 	if err != nil {
@@ -191,22 +183,19 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	ws := newResponseWriterWithStatus(w)
+	defer s.reportLatency(start, ws.status, r.Method, "metadata")
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMetadata(newResponseWriterWithStatus(w), r)
+		s.handlePutMetadata(ws, r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
 	}
 }
 
-func (s *Server) handlePutMetadata(w *responseWirterWithStatus, r *http.Request) {
-	start := time.Now()
-
-	defer func() {
-		s.m.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "metadata", w.status)
-	}()
-
+func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 	var pmr PutMetadataRequest
 	err := json.NewDecoder(r.Body).Decode(&pmr)
 	discardBody(r)
@@ -222,24 +211,23 @@ func (s *Server) handlePutMetadata(w *responseWirterWithStatus, r *http.Request)
 }
 
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	ws := newResponseWriterWithStatus(w)
+	defer func() {
+		s.m.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "metadata", ws.status)
+	}()
+
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetMetadata(newResponseWriterWithStatus(w), r)
+		s.handleGetMetadata(ws, r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
 	}
 }
 
-func (s *Server) handleGetMetadata(w *responseWirterWithStatus, r *http.Request) {
-	start := time.Now()
-
-	defer func() {
-		s.m.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "metadata", w.status)
-	}()
-
+func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	discardBody(r)
-
 	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
 	b, err := base58.Decode(sk)
 	if err != nil {
@@ -265,10 +253,13 @@ func (s *Server) handleGetMetadata(w *responseWirterWithStatus, r *http.Request)
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	ws := newResponseWriterWithStatus(w)
+	defer s.reportLatency(start, ws.status, r.Method, "ready")
 	discardBody(r)
 	switch r.Method {
 	case http.MethodGet:
-		w.WriteHeader(http.StatusOK)
+		ws.WriteHeader(http.StatusOK)
 	default:
 		http.Error(w, "", http.StatusNotFound)
 	}
@@ -277,6 +268,10 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
 	discardBody(r)
 	http.Error(w, "", http.StatusNotFound)
+}
+
+func (s *Server) reportLatency(start time.Time, status int, method, path string) {
+	s.m.RecordHttpLatency(context.Background(), time.Since(start), method, path, status)
 }
 
 func discardBody(r *http.Request) {

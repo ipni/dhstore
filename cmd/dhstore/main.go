@@ -103,7 +103,7 @@ func main() {
 	if err := m.Shutdown(ctx); err != nil {
 		log.Warnw("Failure occurred while shutting down metrics server.", "err", err)
 	} else {
-		log.Info("Shut down metrcis server successfully.")
+		log.Info("Shut down metrics server successfully.")
 	}
 
 	if err := store.Close(); err != nil {
