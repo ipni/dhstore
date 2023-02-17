@@ -196,6 +196,7 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	var pmr PutMetadataRequest
 	err := json.NewDecoder(r.Body).Decode(&pmr)
 	discardBody(r)
@@ -208,6 +209,7 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
+	log.Infow("Finished putting metadata", "keyLen", len(pmr.Key), "valueLen", len(pmr.Value), "time", time.Since(start))
 }
 
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
