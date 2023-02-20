@@ -33,7 +33,7 @@ func (pm *pebbleMetrics) start() error {
 	var err error
 
 	if pm.fsyncFlushCount, err = pm.meter.AsyncInt64().Gauge(
-		"ipni/dhstore/pebble/fsync_flush_count",
+		"ipni/dhstore/pebble/flush_count",
 		instrument.WithUnit(unit.Dimensionless),
 		instrument.WithDescription("The total number of flushes."),
 	); err != nil {
