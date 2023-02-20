@@ -70,11 +70,14 @@ func (m *Metrics) Start(_ context.Context) error {
 		return err
 	}
 
-	go func() { _ = m.s.Serve(mln) }()
-
 	if m.pebbleMetrics != nil {
-		m.pebbleMetrics.start()
+		err = m.pebbleMetrics.start()
+		if err != nil {
+			return err
+		}
 	}
+
+	go func() { _ = m.s.Serve(mln) }()
 
 	log.Infow("Metrics server started", "addr", mln.Addr())
 	return nil

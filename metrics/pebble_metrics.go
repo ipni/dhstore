@@ -16,8 +16,13 @@ type pebbleMetrics struct {
 	metricsProvider func() *pebble.Metrics
 	meter           cmetric.Meter
 
-	// fsyncFlushCount reports the total number of flushes
-	fsyncFlushCount asyncint64.Gauge
+	// flushCount reports the total number of flushes
+	flushCount asyncint64.Gauge
+	// readAdmp reports current read amplification of the database.
+	// It's computed as the number of sublevels in L0 + the number of non-empty
+	// levels below L0.
+	readAmp asyncint64.Gauge
+
 	// NOTE: cache metrics report tagged values for both block and table caches
 	// cacheSize reports the number of bytes inuse by the cache
 	cacheSize asyncint64.Gauge
@@ -32,10 +37,20 @@ type pebbleMetrics struct {
 func (pm *pebbleMetrics) start() error {
 	var err error
 
-	if pm.fsyncFlushCount, err = pm.meter.AsyncInt64().Gauge(
+	if pm.flushCount, err = pm.meter.AsyncInt64().Gauge(
 		"ipni/dhstore/pebble/flush_count",
 		instrument.WithUnit(unit.Dimensionless),
 		instrument.WithDescription("The total number of flushes."),
+	); err != nil {
+		return err
+	}
+
+	if pm.readAmp, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/read_amp",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("current read amplification of the database. "+
+			"It's computed as the number of sublevels in L0 + the number of non-empty"+
+			" levels below L0."),
 	); err != nil {
 		return err
 	}
@@ -74,7 +89,7 @@ func (pm *pebbleMetrics) start() error {
 
 	return pm.meter.RegisterCallback(
 		[]instrument.Asynchronous{
-			pm.fsyncFlushCount,
+			pm.flushCount,
 			pm.cacheCount,
 			pm.cacheSize,
 			pm.cacheHits,
@@ -87,7 +102,8 @@ func (pm *pebbleMetrics) start() error {
 func (pm *pebbleMetrics) reportAsyncMetrics(ctx context.Context) {
 	m := pm.metricsProvider()
 
-	pm.fsyncFlushCount.Observe(ctx, m.Flush.Count)
+	pm.flushCount.Observe(ctx, m.Flush.Count)
+	pm.readAmp.Observe(ctx, int64(m.ReadAmp()))
 	pm.cacheCount.Observe(ctx, m.BlockCache.Count, attribute.String("cache", "block"))
 	pm.cacheSize.Observe(ctx, m.BlockCache.Size, attribute.String("cache", "block"))
 	pm.cacheHits.Observe(ctx, m.BlockCache.Hits, attribute.String("cache", "block"))
