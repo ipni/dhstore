@@ -73,7 +73,7 @@ func main() {
 	}
 	log.Infow("Store opened.", "path", path)
 
-	m, err := metrics.New(*metrcisAddr)
+	m, err := metrics.New(*metrcisAddr, store.Metrics)
 	if err != nil {
 		panic(err)
 	}
