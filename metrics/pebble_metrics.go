@@ -90,6 +90,7 @@ func (pm *pebbleMetrics) start() error {
 	return pm.meter.RegisterCallback(
 		[]instrument.Asynchronous{
 			pm.flushCount,
+			pm.readAmp,
 			pm.cacheCount,
 			pm.cacheSize,
 			pm.cacheHits,
