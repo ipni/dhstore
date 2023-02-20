@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	log = logging.Logger("store/pebble")
+	logger = logging.Logger("store/pebble")
 
 	_ DHStore = (*PebbleDHStore)(nil)
 )
@@ -106,7 +106,7 @@ func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]EncryptedValueKey, err
 		if errors.Is(err, pebble.ErrNotFound) {
 			return nil, nil
 		}
-		log.Debugw("failed to find multihash", "key", mh.B58String(), "err", err)
+		logger.Debugw("failed to find multihash", "key", mh.B58String(), "err", err)
 		return nil, err
 	}
 	defer vkbClose.Close()

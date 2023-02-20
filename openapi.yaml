@@ -71,6 +71,22 @@ paths:
                           items:
                             type: string
                             description: base64 encoded encrypted index value keys.
+              example: |
+                {"EncryptedMultihashResults": [{ "Multihash": "ViAJKqT0hRtxENbtjWwvnRogQknxUnhswNrose3ZjEP8Iw==", "EncryptedValueKeys": ["ZmlzaA==", "bG9ic3Rlcg==", "dW5kYWRhc2Vh"] }]}
+            'application/x-ndjson':
+              schema:
+                type: object
+                properties:
+                  EncryptedValueKey:
+                    type: string
+                    description: base64 encoded encrypted index value keys.
+              example: |
+                {"EncryptedValueKey":"ZmlzaA=="}
+                
+                {"EncryptedValueKey":"bG9ic3Rlcg=="}
+                
+                {"EncryptedValueKey":"dW5kYWRhc2Vh"}
+                
         '400':
           description: The given request is not valid.
           content:

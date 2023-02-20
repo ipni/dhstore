@@ -17,14 +17,15 @@ import (
 
 func TestNewHttpServeMux(t *testing.T) {
 	tests := []struct {
-		name         string
-		onStore      func(*testing.T, dhstore.DHStore)
-		onMethod     string
-		onTarget     string
-		onBody       string
-		expectStatus int
-		expectBody   string
-		expectJSON   bool
+		name           string
+		onStore        func(*testing.T, dhstore.DHStore)
+		onAcceptHeader string
+		onMethod       string
+		onTarget       string
+		onBody         string
+		expectStatus   int
+		expectBody     string
+		expectJSON     bool
 	}{
 		{
 			name:         "GET /multihash is 404",
@@ -136,6 +137,64 @@ func TestNewHttpServeMux(t *testing.T) {
 			expectJSON:   true,
 		},
 		{
+			name:           "streaming GET /multihash/subtree with bad length is 400",
+			onAcceptHeader: "application/x-ndjson",
+			onMethod:       http.MethodGet,
+			onTarget:       "/multihash/asda",
+			expectStatus:   http.StatusBadRequest,
+			expectBody:     "length greater than remaining number of bytes in buffer",
+		},
+		{
+			name:           "streaming GET /multihash/subtree with invalid varint is 400",
+			onAcceptHeader: "application/x-ndjson",
+			onMethod:       http.MethodGet,
+			onTarget:       "/multihash/Quickfish",
+			expectStatus:   http.StatusBadRequest,
+			expectBody:     "varint not minimally encoded",
+		},
+		{
+			name:           "streaming GET /multihash/subtree with invalid multihash is 400",
+			onAcceptHeader: "application/x-ndjson",
+			onMethod:       http.MethodGet,
+			onTarget:       "/multihash/Qmackerel",
+			expectStatus:   http.StatusBadRequest,
+			expectBody:     "input isn't valid multihash",
+		},
+		{
+			name:           "streaming GET /multihash/subtree with valid non-dbl-sha2-256 multihash is 400",
+			onAcceptHeader: "application/x-ndjson",
+			onMethod:       http.MethodGet,
+			onTarget:       "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
+			expectStatus:   http.StatusBadRequest,
+			expectBody:     "multihash must be of code dbl-sha2-256, got: sha2-256",
+		},
+		{
+			name:           "streaming GET /multihash/subtree with valid absent dbl-sha2-256 multihash is 404",
+			onAcceptHeader: "application/x-ndjson",
+			onMethod:       http.MethodGet,
+			onTarget:       "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
+			expectStatus:   http.StatusNotFound,
+		},
+		{
+			name:           "streaming GET /multihash/subtree with valid present dbl-sha2-256 multihash is 200",
+			onAcceptHeader: "application/x-ndjson",
+			onStore: func(t *testing.T, store dhstore.DHStore) {
+				mh, err := multihash.FromB58String("2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82")
+				require.NoError(t, err)
+				require.NoError(t, store.MergeIndex(mh, []byte("fish")))
+				require.NoError(t, store.MergeIndex(mh, []byte("lobster")))
+				require.NoError(t, store.MergeIndex(mh, []byte("undadasea")))
+			},
+			onMethod:     http.MethodGet,
+			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
+			expectStatus: http.StatusOK,
+			expectBody: `{"EncryptedValueKey":"ZmlzaA=="}
+
+{"EncryptedValueKey":"bG9ic3Rlcg=="}
+
+{"EncryptedValueKey":"dW5kYWRhc2Vh"}`,
+		},
+		{
 			name:         "PUT /metadata with valid key value is 202",
 			onMethod:     http.MethodPut,
 			onBody:       `{"key": "ZmlzaA==", "value": "ZmlzaA==" }`,
@@ -172,6 +231,9 @@ func TestNewHttpServeMux(t *testing.T) {
 			subject := dhstore.NewHttpServeMux(store, m)
 
 			given := httptest.NewRequest(test.onMethod, test.onTarget, bytes.NewBufferString(test.onBody))
+			if test.onAcceptHeader != "" {
+				given.Header.Set("Accept", test.onAcceptHeader)
+			}
 			got := httptest.NewRecorder()
 			subject.ServeHTTP(got, given)
 			require.Equal(t, test.expectStatus, got.Code)

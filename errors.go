@@ -2,6 +2,7 @@ package dhstore
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
@@ -14,6 +15,11 @@ type (
 	ErrMultihashDecode struct {
 		mh  multihash.Multihash
 		err error
+	}
+
+	errHttpResponse struct {
+		message string
+		status  int
 	}
 )
 
@@ -30,4 +36,12 @@ func (e ErrMultihashDecode) Error() string {
 
 func (e ErrMultihashDecode) Unwrap() error {
 	return e.err
+}
+
+func (e errHttpResponse) Error() string {
+	return e.message
+}
+
+func (e errHttpResponse) WriteTo(w http.ResponseWriter) {
+	http.Error(w, e.message, e.status)
 }
