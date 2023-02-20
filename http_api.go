@@ -24,4 +24,7 @@ type (
 	GetMetadataResponse struct {
 		EncryptedMetadata EncryptedMetadata `json:"EncryptedMetadata"`
 	}
+	EncryptedValueKeyResult struct {
+		EncryptedValueKey EncryptedValueKey `json:"EncryptedValueKey"`
+	}
 )

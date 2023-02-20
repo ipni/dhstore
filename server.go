@@ -13,8 +13,11 @@ import (
 
 	"github.com/ipni/dhstore/metrics"
 	"github.com/mr-tron/base58"
-	"github.com/multiformats/go-multihash"
 )
+
+// preferJSON specifies weather to prefer JSON over NDJSON response when request accepts */*, i.e.
+// any response format, has no `Accept` header at all.
+const preferJSON = true
 
 type Server struct {
 	s   *http.Server
@@ -80,7 +83,7 @@ func (s *Server) Start(_ context.Context) error {
 	}
 	go func() { _ = s.s.Serve(ln) }()
 
-	log.Infow("Server started", "addr", ln.Addr())
+	logger.Infow("Server started", "addr", ln.Addr())
 	return nil
 }
 
@@ -107,7 +110,7 @@ func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
 	defer s.reportLatency(start, ws.status, r.Method, "multihash")
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetMh(ws, r)
+		s.handleGetMh(newIPNILookupResponseWriter(ws, preferJSON), r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -134,40 +137,44 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	log.Infow("Finished putting multihashes", "count", len(mir.Merges))
+	logger.Infow("Finished putting multihashes", "count", len(mir.Merges))
 	if len(mir.Merges) != 0 {
-		log.Infow("Multihash to try out", "mh", mir.Merges[0].Key.B58String())
+		logger.Infow("Multihash to try out", "mh", mir.Merges[0].Key.B58String())
 	}
 	w.WriteHeader(http.StatusAccepted)
 }
 
-func (s *Server) handleGetMh(w http.ResponseWriter, r *http.Request) {
-	discardBody(r)
-	smh := strings.TrimPrefix(path.Base(r.URL.Path), "multihash/")
-	mh, err := multihash.FromB58String(smh)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
+	if err := w.Accept(r); err != nil {
+		switch e := err.(type) {
+		case errHttpResponse:
+			e.WriteTo(w)
+		default:
+			logger.Errorw("Failed to accept lookup request", "err", err)
+			http.Error(w, "", http.StatusInternalServerError)
+		}
 		return
 	}
-	evks, err := s.dhs.Lookup(mh)
+	evks, err := s.dhs.Lookup(w.Key())
 	if err != nil {
 		s.handleError(w, err)
 		return
 	}
-	if len(evks) == 0 {
-		http.Error(w, "", http.StatusNotFound)
-		return
+	for _, evk := range evks {
+		if err := w.WriteEncryptedValueKey(evk); err != nil {
+			logger.Errorw("Failed to encode encrypted value key", "err", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
 	}
-	lr := LookupResponse{
-		EncryptedMultihashResults: []EncryptedMultihashResult{
-			{
-				Multihash:          mh,
-				EncryptedValueKeys: evks,
-			},
-		},
-	}
-	if err := json.NewEncoder(w).Encode(lr); err != nil {
-		log.Errorw("Failed to write lookup response", "err", err, "mh", smh, "resultsCount", len(evks))
+	if err := w.Close(); err != nil {
+		switch e := err.(type) {
+		case errHttpResponse:
+			e.WriteTo(w)
+		default:
+			logger.Errorw("Failed to finalize lookup results", "err", err)
+			http.Error(w, "", http.StatusInternalServerError)
+		}
 	}
 }
 
@@ -209,7 +216,7 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-	log.Infow("Finished putting metadata", "keyLen", len(pmr.Key), "valueLen", len(pmr.Value), "time", time.Since(start))
+	logger.Infow("Finished putting metadata", "keyLen", len(pmr.Key), "valueLen", len(pmr.Value), "time", time.Since(start))
 }
 
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
@@ -250,7 +257,7 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 		EncryptedMetadata: emd,
 	}
 	if err := json.NewEncoder(w).Encode(gmr); err != nil {
-		log.Errorw("Failed to write get metadata response", "err", err, "key", sk)
+		logger.Errorw("Failed to write get metadata response", "err", err, "key", sk)
 	}
 }
 
