@@ -166,7 +166,7 @@ func TestNewHttpServeMux(t *testing.T) {
 			if test.onStore != nil {
 				test.onStore(t, store)
 			}
-			m, err := metrics.New("0.0.0.0:40081")
+			m, err := metrics.New("0.0.0.0:40081", nil)
 			require.NoError(t, err)
 
 			subject := dhstore.NewHttpServeMux(store, m)

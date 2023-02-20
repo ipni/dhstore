@@ -188,3 +188,8 @@ func (s *PebbleDHStore) unmarshalEncryptedIndexKeys(b []byte) ([]EncryptedValueK
 	}
 	return evks, nil
 }
+
+// Metrics returns underlying pebble DB metrics
+func (s *PebbleDHStore) Metrics() *pebble.Metrics {
+	return s.db.Metrics()
+}

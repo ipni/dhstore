@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cockroachdb/pebble"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel/attribute"
@@ -21,12 +22,13 @@ var (
 )
 
 type Metrics struct {
-	exporter    *prometheus.Exporter
-	httpLatency syncint64.Histogram
-	s           *http.Server
+	exporter      *prometheus.Exporter
+	httpLatency   syncint64.Histogram
+	s             *http.Server
+	pebbleMetrics *pebbleMetrics
 }
 
-func New(metricsAddr string) (*Metrics, error) {
+func New(metricsAddr string, pebbleMetricsProvider func() *pebble.Metrics) (*Metrics, error) {
 	var m Metrics
 	var err error
 	if m.exporter, err = prometheus.New(prometheus.WithoutUnits()); err != nil {
@@ -47,6 +49,13 @@ func New(metricsAddr string) (*Metrics, error) {
 		Handler: metricsMux(),
 	}
 
+	if pebbleMetricsProvider != nil {
+		m.pebbleMetrics = &pebbleMetrics{
+			metricsProvider: pebbleMetricsProvider,
+			meter:           meter,
+		}
+	}
+
 	return &m, nil
 }
 
@@ -62,6 +71,10 @@ func (m *Metrics) Start(_ context.Context) error {
 	}
 
 	go func() { _ = m.s.Serve(mln) }()
+
+	if m.pebbleMetrics != nil {
+		m.pebbleMetrics.start()
+	}
 
 	log.Infow("Metrics server started", "addr", mln.Addr())
 	return nil
