@@ -32,6 +32,22 @@ type pebbleMetrics struct {
 	cacheHits asyncint64.Gauge
 	// cacheMisses reports number of cache misses.
 	cacheMisses asyncint64.Gauge
+
+	// compactCount is the total number of compactions, and per-compaction type counts.
+	compactCount asyncint64.Gauge
+	// compactEstimatedDebt is an estimate of the number of bytes that need to be compacted for the LSM
+	// to reach a stable state.
+	compactEstimatedDebt asyncint64.Gauge
+	// compactInProgressBytes is a number of bytes present in sstables being written by in-progress
+	// compactions. This value will be zero if there are no in-progress
+	// compactions.
+	compactInProgressBytes asyncint64.Gauge
+	// compactNumInProgress is a number of compactions that are in-progress.
+	compactNumInProgress asyncint64.Gauge
+	// compactMarkedFiles MarkedFiles is a count of files that are marked for
+	// compaction. Such files are compacted in a rewrite compaction
+	// when no other compactions are picked.
+	compactMarkedFiles asyncint64.Gauge
 }
 
 func (pm *pebbleMetrics) start() error {
@@ -87,6 +103,51 @@ func (pm *pebbleMetrics) start() error {
 		return err
 	}
 
+	if pm.compactCount, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_count",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("The total number of compactions, and per-compaction type counts."),
+	); err != nil {
+		return err
+	}
+
+	if pm.compactEstimatedDebt, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_estimated_debt",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("An estimate of the number of bytes that need to be compacted for the LSM"+
+			" to reach a stable state."),
+	); err != nil {
+		return err
+	}
+
+	if pm.compactInProgressBytes, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_in_progress_bytes",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("A number of bytes present in sstables being written by in-progress"+
+			" compactions. This value will be zero if there are no in-progress"+
+			" compactions."),
+	); err != nil {
+		return err
+	}
+
+	if pm.compactNumInProgress, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_num_in_progress",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("A number of compactions that are in-progress."),
+	); err != nil {
+		return err
+	}
+
+	if pm.compactMarkedFiles, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_marked_files",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("A count of files that are marked for"+
+			" compaction. Such files are compacted in a rewrite compaction"+
+			" when no other compactions are picked."),
+	); err != nil {
+		return err
+	}
+
 	return pm.meter.RegisterCallback(
 		[]instrument.Asynchronous{
 			pm.flushCount,
@@ -95,6 +156,11 @@ func (pm *pebbleMetrics) start() error {
 			pm.cacheSize,
 			pm.cacheHits,
 			pm.cacheMisses,
+			pm.compactCount,
+			pm.compactEstimatedDebt,
+			pm.compactInProgressBytes,
+			pm.compactNumInProgress,
+			pm.compactMarkedFiles,
 		},
 		pm.reportAsyncMetrics,
 	)
@@ -114,4 +180,10 @@ func (pm *pebbleMetrics) reportAsyncMetrics(ctx context.Context) {
 	pm.cacheSize.Observe(ctx, m.TableCache.Size, attribute.String("cache", "table"))
 	pm.cacheHits.Observe(ctx, m.TableCache.Hits, attribute.String("cache", "table"))
 	pm.cacheMisses.Observe(ctx, m.TableCache.Misses, attribute.String("cache", "table"))
+
+	pm.compactCount.Observe(ctx, int64(m.Compact.Count))
+	pm.compactEstimatedDebt.Observe(ctx, int64(m.Compact.EstimatedDebt))
+	pm.compactInProgressBytes.Observe(ctx, int64(m.Compact.InProgressBytes))
+	pm.compactNumInProgress.Observe(ctx, int64(m.Compact.NumInProgress))
+	pm.compactMarkedFiles.Observe(ctx, int64(m.Compact.MarkedFiles))
 }
