@@ -21,6 +21,8 @@ type pebbleMetrics struct {
 	// readAdmp reports current read amplification of the database.
 	// It's computed as the number of sublevels in L0 + the number of non-empty
 	// levels below L0.
+	// Read amplification factor should be in the single digits. A value exceeding 50 for 1 hour
+	// strongly suggests that the LSM tree has an unhealthy shape.
 	readAmp asyncint64.Gauge
 
 	// NOTE: cache metrics report tagged values for both block and table caches
@@ -44,10 +46,15 @@ type pebbleMetrics struct {
 	compactInProgressBytes asyncint64.Gauge
 	// compactNumInProgress is a number of compactions that are in-progress.
 	compactNumInProgress asyncint64.Gauge
-	// compactMarkedFiles MarkedFiles is a count of files that are marked for
+	// compactMarkedFiles is a count of files that are marked for
 	// compaction. Such files are compacted in a rewrite compaction
 	// when no other compactions are picked.
 	compactMarkedFiles asyncint64.Gauge
+
+	// l0NumFiles is the total number of files in L0. The number of L0 files should not be in the high thousands.
+	// High values indicate heavy write load that is causing accumulation of files in level 0. These files are not
+	// being compacted quickly enough to lower levels, resulting in a misshapen LSM.
+	l0NumFiles asyncint64.Gauge
 }
 
 func (pm *pebbleMetrics) start() error {
@@ -148,6 +155,16 @@ func (pm *pebbleMetrics) start() error {
 		return err
 	}
 
+	if pm.l0NumFiles, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_l0_num_files",
+		instrument.WithUnit(unit.Dimensionless),
+		instrument.WithDescription("The total number of files in L0. The number of L0 files should not be in the high thousands."+
+			" High values indicate heavy write load that is causing accumulation of files in level 0. These files are not"+
+			" being compacted quickly enough to lower levels, resulting in a misshapen LSM."),
+	); err != nil {
+		return err
+	}
+
 	return pm.meter.RegisterCallback(
 		[]instrument.Asynchronous{
 			pm.flushCount,
@@ -161,6 +178,7 @@ func (pm *pebbleMetrics) start() error {
 			pm.compactInProgressBytes,
 			pm.compactNumInProgress,
 			pm.compactMarkedFiles,
+			pm.l0NumFiles,
 		},
 		pm.reportAsyncMetrics,
 	)
@@ -186,4 +204,6 @@ func (pm *pebbleMetrics) reportAsyncMetrics(ctx context.Context) {
 	pm.compactInProgressBytes.Observe(ctx, int64(m.Compact.InProgressBytes))
 	pm.compactNumInProgress.Observe(ctx, int64(m.Compact.NumInProgress))
 	pm.compactMarkedFiles.Observe(ctx, int64(m.Compact.MarkedFiles))
+
+	pm.l0NumFiles.Observe(ctx, int64(m.Levels[0].NumFiles))
 }
