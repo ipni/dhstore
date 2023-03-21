@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/pebble"
@@ -24,11 +26,17 @@ func main() {
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrcis HTTP server listen address.")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
+	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	flag.Parse()
 
 	if _, set := os.LookupEnv("GOLOG_LOG_LEVEL"); !set {
 		_ = logging.SetLogLevel("*", *llvl)
+	}
+
+	parsedBlockCacheSize, err := parseBlockCacheSize(*blockCacheSize)
+	if err != nil {
+		panic(err)
 	}
 
 	// Default options copied from cockroachdb with the addition of 1GiB cache.
@@ -64,7 +72,7 @@ func main() {
 		l.EnsureDefaults()
 	}
 	opts.Levels[numLevels-1].FilterPolicy = nil
-	opts.Cache = pebble.NewCache(512 << 20) // 512 MiB
+	opts.Cache = pebble.NewCache(int64(parsedBlockCacheSize))
 
 	path := filepath.Clean(*storePath)
 	store, err := dhstore.NewPebbleDHStore(path, opts)
@@ -111,4 +119,37 @@ func main() {
 	} else {
 		log.Info("Closed store successfully.")
 	}
+}
+
+func parseBlockCacheSize(str string) (uint64, error) {
+	// If the value is empty - defaulting to zero
+	if len(str) == 0 {
+		return 0, nil
+	}
+	// If there is less than two bytes - treating it as a number
+	if len(str) <= 2 {
+		n, err := strconv.Atoi(str)
+		if err != nil {
+			return 0, err
+		}
+		return uint64(n), err
+	}
+	suffix := strings.ToLower(str[len(str)-2:])
+	multiplier := 1
+	var n int
+	var err error
+	switch suffix {
+	case "mi":
+		n, err = strconv.Atoi(str[:len(str)-2])
+		multiplier = 1 << 20
+	case "gi":
+		n, err = strconv.Atoi(str[:len(str)-2])
+		multiplier = 1 << 30
+	default:
+		n, err = strconv.Atoi(str)
+	}
+	if err != nil {
+		return 0, err
+	}
+	return uint64(n * multiplier), nil
 }
