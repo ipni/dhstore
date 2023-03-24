@@ -15,6 +15,8 @@ import (
 	"go.opentelemetry.io/otel/metric/instrument/syncint64"
 	"go.opentelemetry.io/otel/metric/unit"
 	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/aggregation"
+	"go.opentelemetry.io/otel/sdk/metric/view"
 )
 
 var (
@@ -28,10 +30,22 @@ type Metrics struct {
 	pebbleMetrics *pebbleMetrics
 }
 
+func aggregationSelector(ik view.InstrumentKind) aggregation.Aggregation {
+	if ik == view.SyncHistogram {
+		return aggregation.ExplicitBucketHistogram{
+			Boundaries: []float64{0, 10, 50, 100, 200, 500, 1000, 2000, 5000, 10_000, 20_000, 30_000, 50_000},
+			NoMinMax:   false,
+		}
+	}
+	return metric.DefaultAggregationSelector(ik)
+}
+
 func New(metricsAddr string, pebbleMetricsProvider func() *pebble.Metrics) (*Metrics, error) {
 	var m Metrics
 	var err error
-	if m.exporter, err = prometheus.New(prometheus.WithoutUnits()); err != nil {
+	if m.exporter, err = prometheus.New(
+		prometheus.WithoutUnits(),
+		prometheus.WithAggregationSelector(aggregationSelector)); err != nil {
 		return nil, err
 	}
 
