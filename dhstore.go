@@ -13,5 +13,6 @@ type (
 		PutMetadata(HashedValueKey, EncryptedMetadata) error
 		Lookup(multihash.Multihash) ([]EncryptedValueKey, error)
 		GetMetadata(HashedValueKey) (EncryptedMetadata, error)
+		DeleteMetadata(HashedValueKey) error
 	}
 )
