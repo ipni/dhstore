@@ -229,6 +229,8 @@ func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		s.handleGetMetadata(ws, r)
+	case http.MethodDelete:
+		s.handleDeleteMetadata(ws, r)
 	default:
 		discardBody(r)
 		http.Error(w, "", http.StatusNotFound)
@@ -258,6 +260,21 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewEncoder(w).Encode(gmr); err != nil {
 		logger.Errorw("Failed to write get metadata response", "err", err, "key", sk)
+	}
+}
+
+func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
+	discardBody(r)
+	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
+	b, err := base58.Decode(sk)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
+		return
+	}
+	hvk := HashedValueKey(b)
+	err = s.dhs.DeleteMetadata(hvk)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 

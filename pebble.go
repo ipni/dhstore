@@ -136,6 +136,17 @@ func (s *PebbleDHStore) GetMetadata(hvk HashedValueKey) (EncryptedMetadata, erro
 	return em, nil
 }
 
+func (s *PebbleDHStore) DeleteMetadata(hvk HashedValueKey) error {
+	keygen := s.p.leaseSimpleKeyer()
+	defer keygen.Close()
+	hvkk, err := keygen.hashedValueKeyKey(hvk)
+	if err != nil {
+		return err
+	}
+
+	return s.db.Delete(hvkk.buf, pebble.NoSync)
+}
+
 func (s *PebbleDHStore) Size() (int64, error) {
 	sizeEstimate, err := s.db.EstimateDiskUsage([]byte{0}, []byte{0xff})
 	return int64(sizeEstimate), err
