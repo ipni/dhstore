@@ -1,4 +1,4 @@
-package dhstore_test
+package bench_test
 
 import (
 	"math/rand"
@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
 	"github.com/ipni/dhstore"
+	dhpebble "github.com/ipni/dhstore/pebble"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func BenchmarkDHStore_GetMetadata(b *testing.B) {
 	benchmarkGetMetadatas(b, 500_000, 32, 113)
 }
 
-func newDHStore(b *testing.B) *dhstore.PebbleDHStore {
+func newDHStore(b *testing.B) dhstore.DHStore {
 	opts := &pebble.Options{
 		BytesPerSync:                10 << 20, // 10 MiB
 		WALBytesPerSync:             10 << 20, // 10 MiB
@@ -63,7 +64,7 @@ func newDHStore(b *testing.B) *dhstore.PebbleDHStore {
 	}
 	opts.Levels[numLevels-1].FilterPolicy = nil
 	opts.Cache = pebble.NewCache(1 << 30) // 1 GiB
-	d, err := dhstore.NewPebbleDHStore(b.TempDir(), opts)
+	d, err := dhpebble.NewPebbleDHStore(b.TempDir(), opts)
 	require.NoError(b, err)
 	return d
 }
@@ -159,7 +160,7 @@ func benchmarkGetMetadatas(b *testing.B, n, hvkLen, mdLen int) {
 	b.StopTimer()
 }
 
-func getMultihashes(b *testing.B, mhs []multihash.Multihash, store *dhstore.PebbleDHStore) {
+func getMultihashes(b *testing.B, mhs []multihash.Multihash, store dhstore.DHStore) {
 	for _, mh := range mhs {
 		evks, err := store.Lookup(mh)
 		require.NoError(b, err)
@@ -167,21 +168,21 @@ func getMultihashes(b *testing.B, mhs []multihash.Multihash, store *dhstore.Pebb
 	}
 }
 
-func putMultihashes(b *testing.B, mhs []multihash.Multihash, vks [][]byte, store *dhstore.PebbleDHStore) {
+func putMultihashes(b *testing.B, mhs []multihash.Multihash, vks [][]byte, store dhstore.DHStore) {
 	for i, mh := range mhs {
 		err := store.MergeIndex(mh, vks[i])
 		require.NoError(b, err)
 	}
 }
 
-func putMetadatas(b *testing.B, hvks, metadatas [][]byte, store *dhstore.PebbleDHStore) {
+func putMetadatas(b *testing.B, hvks, metadatas [][]byte, store dhstore.DHStore) {
 	for i, hvk := range hvks {
 		err := store.PutMetadata(hvk, metadatas[i])
 		require.NoError(b, err)
 	}
 }
 
-func getMetadatas(b *testing.B, hvks [][]byte, store *dhstore.PebbleDHStore) {
+func getMetadatas(b *testing.B, hvks [][]byte, store dhstore.DHStore) {
 	for _, hvk := range hvks {
 		md, err := store.GetMetadata(hvk)
 		require.NoError(b, err)

@@ -1,4 +1,4 @@
-package dhstore
+package server
 
 import (
 	"context"
@@ -11,9 +11,13 @@ import (
 	"strings"
 	"time"
 
+	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipni/dhstore"
 	"github.com/ipni/dhstore/metrics"
 	"github.com/mr-tron/base58"
 )
+
+var logger = logging.Logger("server/http")
 
 // preferJSON specifies weather to prefer JSON over NDJSON response when request accepts */*, i.e.
 // any response format, has no `Accept` header at all.
@@ -22,7 +26,7 @@ const preferJSON = true
 type Server struct {
 	s   *http.Server
 	m   *metrics.Metrics
-	dhs DHStore
+	dhs dhstore.DHStore
 }
 
 // responseWriterWithStatus is required to capture status code from ResponseWriter so that it can be reported
@@ -45,7 +49,7 @@ func (rec *responseWriterWithStatus) WriteHeader(code int) {
 	rec.ResponseWriter.WriteHeader(code)
 }
 
-func NewHttpServer(dhs DHStore, m *metrics.Metrics, addr string) (*Server, error) {
+func NewHttpServer(dhs dhstore.DHStore, m *metrics.Metrics, addr string) (*Server, error) {
 	var dhss Server
 	dhss.s = &http.Server{
 		Addr:    addr,
@@ -57,7 +61,7 @@ func NewHttpServer(dhs DHStore, m *metrics.Metrics, addr string) (*Server, error
 	return &dhss, nil
 }
 
-func NewHttpServeMux(dhs DHStore, m *metrics.Metrics) *http.ServeMux {
+func NewHttpServeMux(dhs dhstore.DHStore, m *metrics.Metrics) *http.ServeMux {
 	s := &Server{
 		dhs: dhs,
 		m:   m,
@@ -181,7 +185,7 @@ func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
 func (s *Server) handleError(w http.ResponseWriter, err error) {
 	var status int
 	switch err.(type) {
-	case ErrUnsupportedMulticodecCode, ErrMultihashDecode:
+	case dhstore.ErrUnsupportedMulticodecCode, dhstore.ErrMultihashDecode, dhstore.ErrInvalidHashedValueKey:
 		status = http.StatusBadRequest
 	default:
 		status = http.StatusInternalServerError
@@ -212,7 +216,7 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.dhs.PutMetadata(pmr.Key, pmr.Value); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.handleError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
@@ -245,10 +249,10 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
 		return
 	}
-	hvk := HashedValueKey(b)
+	hvk := dhstore.HashedValueKey(b)
 	emd, err := s.dhs.GetMetadata(hvk)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		s.handleError(w, err)
 		return
 	}
 	if len(emd) == 0 {
@@ -271,10 +275,10 @@ func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
 		return
 	}
-	hvk := HashedValueKey(b)
-	err = s.dhs.DeleteMetadata(hvk)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	hvk := dhstore.HashedValueKey(b)
+	if err := s.dhs.DeleteMetadata(hvk); err != nil {
+		s.handleError(w, err)
+		return
 	}
 }
 

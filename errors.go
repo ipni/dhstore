@@ -2,46 +2,48 @@ package dhstore
 
 import (
 	"fmt"
-	"net/http"
 
+	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 )
 
 type (
 	ErrUnsupportedMulticodecCode struct {
-		code multicodec.Code
+		Code multicodec.Code
 	}
 	ErrMultihashDecode struct {
-		mh  multihash.Multihash
-		err error
+		Mh  multihash.Multihash
+		Err error
 	}
-
-	errHttpResponse struct {
-		message string
-		status  int
+	ErrInvalidHashedValueKey struct {
+		Key HashedValueKey
+		Err error
 	}
 )
 
 func (e ErrUnsupportedMulticodecCode) Error() string {
-	return fmt.Sprintf("multihash must be of code dbl-sha2-256, got: %s", e.code.String())
+	return fmt.Sprintf("multihash must be of code dbl-sha2-256, got: %s", e.Code.String())
 }
 
 func (e ErrMultihashDecode) Error() string {
-	if e.err != nil {
-		return fmt.Sprintf("failed to decode multihash %s: %s", e.mh.B58String(), e.err.Error())
+	if e.Err != nil {
+		return fmt.Sprintf("failed to decode multihash %s: %s", e.Mh.B58String(), e.Err.Error())
 	}
-	return fmt.Sprintf("failed to decode multihash %s", e.mh.B58String())
+	return fmt.Sprintf("failed to decode multihash %s", e.Mh.B58String())
 }
 
 func (e ErrMultihashDecode) Unwrap() error {
-	return e.err
+	return e.Err
 }
 
-func (e errHttpResponse) Error() string {
-	return e.message
+func (e ErrInvalidHashedValueKey) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("invalid hashed value key %s: %s", base58.Encode(e.Key), e.Err.Error())
+	}
+	return fmt.Sprintf("invalid hashed value key %s", base58.Encode(e.Key))
 }
 
-func (e errHttpResponse) WriteTo(w http.ResponseWriter) {
-	http.Error(w, e.message, e.status)
+func (e ErrInvalidHashedValueKey) Unwrap() error {
+	return e.Err
 }

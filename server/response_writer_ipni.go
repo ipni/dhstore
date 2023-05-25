@@ -1,10 +1,11 @@
-package dhstore
+package server
 
 import (
 	"net/http"
 	"path"
 	"strings"
 
+	"github.com/ipni/dhstore"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -43,7 +44,7 @@ func (i *ipniLookupResponseWriter) Key() multihash.Multihash {
 	return i.result.Multihash
 }
 
-func (i *ipniLookupResponseWriter) WriteEncryptedValueKey(evk EncryptedValueKey) error {
+func (i *ipniLookupResponseWriter) WriteEncryptedValueKey(evk dhstore.EncryptedValueKey) error {
 	if i.nd {
 		if err := i.encoder.Encode(EncryptedValueKeyResult{
 			EncryptedValueKey: evk,

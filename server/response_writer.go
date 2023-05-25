@@ -1,9 +1,10 @@
-package dhstore
+package server
 
 import (
 	"io"
 	"net/http"
 
+	"github.com/ipni/dhstore"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -16,6 +17,6 @@ type (
 		io.Closer
 		selectiveResponseWriter
 		Key() multihash.Multihash
-		WriteEncryptedValueKey(EncryptedValueKey) error
+		WriteEncryptedValueKey(dhstore.EncryptedValueKey) error
 	}
 )

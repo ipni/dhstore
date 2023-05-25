@@ -1,4 +1,4 @@
-package dhstore_test
+package server_test
 
 import (
 	"bytes"
@@ -10,6 +10,8 @@ import (
 
 	"github.com/ipni/dhstore"
 	"github.com/ipni/dhstore/metrics"
+	"github.com/ipni/dhstore/pebble"
+	"github.com/ipni/dhstore/server"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
@@ -219,7 +221,7 @@ func TestNewHttpServeMux(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			store, err := dhstore.NewPebbleDHStore(t.TempDir(), nil)
+			store, err := pebble.NewPebbleDHStore(t.TempDir(), nil)
 			require.NoError(t, err)
 			defer store.Close()
 			if test.onStore != nil {
@@ -228,7 +230,7 @@ func TestNewHttpServeMux(t *testing.T) {
 			m, err := metrics.New("0.0.0.0:40081", nil)
 			require.NoError(t, err)
 
-			subject := dhstore.NewHttpServeMux(store, m)
+			subject := server.NewHttpServeMux(store, m)
 
 			given := httptest.NewRequest(test.onMethod, test.onTarget, bytes.NewBufferString(test.onBody))
 			if test.onAcceptHeader != "" {

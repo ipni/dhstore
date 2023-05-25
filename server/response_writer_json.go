@@ -1,4 +1,4 @@
-package dhstore
+package server
 
 import (
 	"encoding/json"
