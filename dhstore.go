@@ -1,6 +1,8 @@
 package dhstore
 
 import (
+	"io"
+
 	"github.com/multiformats/go-multihash"
 )
 
@@ -9,6 +11,7 @@ type (
 	EncryptedMetadata []byte
 	HashedValueKey    []byte
 	DHStore           interface {
+		io.Closer
 		MergeIndex(multihash.Multihash, EncryptedValueKey) error
 		PutMetadata(HashedValueKey, EncryptedMetadata) error
 		Lookup(multihash.Multihash) ([]EncryptedValueKey, error)

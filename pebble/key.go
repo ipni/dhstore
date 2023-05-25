@@ -1,8 +1,9 @@
-package dhstore
+package pebble
 
 import (
 	"io"
 
+	"github.com/ipni/dhstore"
 	"github.com/multiformats/go-multihash"
 	"lukechampine.com/blake3"
 )
@@ -21,7 +22,7 @@ type (
 	}
 	keyer interface {
 		multihashKey(multihash.Multihash) (*key, error)
-		hashedValueKeyKey(HashedValueKey) (*key, error)
+		hashedValueKeyKey(valueKey dhstore.HashedValueKey) (*key, error)
 	}
 	blake3Keyer struct {
 		hasher *blake3.Hasher
@@ -79,7 +80,7 @@ func (b *blake3Keyer) multihashKey(mh multihash.Multihash) (*key, error) {
 }
 
 // hashedValueKeyKey returns the key by which metadata is identified.
-func (b *blake3Keyer) hashedValueKeyKey(hvk HashedValueKey) (*key, error) {
+func (b *blake3Keyer) hashedValueKeyKey(hvk dhstore.HashedValueKey) (*key, error) {
 	b.hasher.Reset()
 	if _, err := b.hasher.Write(hvk); err != nil {
 		return nil, err

@@ -14,7 +14,10 @@ import (
 	"github.com/cockroachdb/pebble/bloom"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
+	"github.com/ipni/dhstore/fdb"
 	"github.com/ipni/dhstore/metrics"
+	dhpebble "github.com/ipni/dhstore/pebble"
+	"github.com/ipni/dhstore/server"
 )
 
 var (
@@ -28,71 +31,91 @@ func main() {
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
+	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
+	fdbApiVersion := flag.Int("fdbApiVersion", 0, "Required. The FoundationDB API version as a numeric value")
+	fdbClusterFile := flag.String("fdbClusterFile", "", "Required. Path to ")
+
 	flag.Parse()
 
 	if _, set := os.LookupEnv("GOLOG_LOG_LEVEL"); !set {
 		_ = logging.SetLogLevel("*", *llvl)
 	}
 
-	parsedBlockCacheSize, err := parseBlockCacheSize(*blockCacheSize)
-	if err != nil {
-		panic(err)
-	}
-
-	// Default options copied from cockroachdb with the addition of 1GiB cache.
-	// See:
-	// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
-	opts := &pebble.Options{
-		BytesPerSync:                10 << 20, // 10 MiB
-		WALBytesPerSync:             10 << 20, // 10 MiB
-		MaxConcurrentCompactions:    10,
-		MemTableSize:                64 << 20, // 64 MiB
-		MemTableStopWritesThreshold: 4,
-		LBaseMaxBytes:               64 << 20, // 64 MiB
-		L0CompactionThreshold:       2,
-		L0StopWritesThreshold:       1000,
-		DisableWAL:                  *dwal,
-		WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
-	}
-
-	opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
-	opts.Experimental.MinDeletionRate = 128 << 20   // 128 MiB
-
-	const numLevels = 7
-	opts.Levels = make([]pebble.LevelOptions, numLevels)
-	for i := 0; i < numLevels; i++ {
-		l := &opts.Levels[i]
-		l.BlockSize = 32 << 10       // 32 KiB
-		l.IndexBlockSize = 256 << 10 // 256 KiB
-		l.FilterPolicy = bloom.FilterPolicy(10)
-		l.FilterType = pebble.TableFilter
-		if i > 0 {
-			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+	var store dhstore.DHStore
+	var pebbleMetricsProvider func() *pebble.Metrics
+	switch *storeType {
+	case "pebble":
+		parsedBlockCacheSize, err := parseBlockCacheSize(*blockCacheSize)
+		if err != nil {
+			panic(err)
 		}
-		l.EnsureDefaults()
-	}
-	opts.Levels[numLevels-1].FilterPolicy = nil
-	opts.Cache = pebble.NewCache(int64(parsedBlockCacheSize))
 
-	path := filepath.Clean(*storePath)
-	store, err := dhstore.NewPebbleDHStore(path, opts)
+		// Default options copied from cockroachdb with the addition of 1GiB cache.
+		// See:
+		// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
+		opts := &pebble.Options{
+			BytesPerSync:                10 << 20, // 10 MiB
+			WALBytesPerSync:             10 << 20, // 10 MiB
+			MaxConcurrentCompactions:    10,
+			MemTableSize:                64 << 20, // 64 MiB
+			MemTableStopWritesThreshold: 4,
+			LBaseMaxBytes:               64 << 20, // 64 MiB
+			L0CompactionThreshold:       2,
+			L0StopWritesThreshold:       1000,
+			DisableWAL:                  *dwal,
+			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
+		}
+
+		opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
+		opts.Experimental.MinDeletionRate = 128 << 20   // 128 MiB
+
+		const numLevels = 7
+		opts.Levels = make([]pebble.LevelOptions, numLevels)
+		for i := 0; i < numLevels; i++ {
+			l := &opts.Levels[i]
+			l.BlockSize = 32 << 10       // 32 KiB
+			l.IndexBlockSize = 256 << 10 // 256 KiB
+			l.FilterPolicy = bloom.FilterPolicy(10)
+			l.FilterType = pebble.TableFilter
+			if i > 0 {
+				l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+			}
+			l.EnsureDefaults()
+		}
+		opts.Levels[numLevels-1].FilterPolicy = nil
+		opts.Cache = pebble.NewCache(int64(parsedBlockCacheSize))
+
+		path := filepath.Clean(*storePath)
+		pbstore, err := dhpebble.NewPebbleDHStore(path, opts)
+		if err != nil {
+			panic(err)
+		}
+		store = pbstore
+		pebbleMetricsProvider = pbstore.Metrics
+		log.Infow("Store opened.", "path", path)
+	case "fdb":
+		var err error
+		store, err = fdb.NewFDBDHStore(fdb.WithApiVersion(*fdbApiVersion), fdb.WithClusterFile(*fdbClusterFile))
+		if err != nil {
+			panic(err)
+		}
+		log.Infow("Using FoundationDB backing store.")
+	default:
+		panic("unknown storeType: " + *storeType)
+	}
+
+	m, err := metrics.New(*metrcisAddr, pebbleMetricsProvider)
 	if err != nil {
 		panic(err)
 	}
-	log.Infow("Store opened.", "path", path)
 
-	m, err := metrics.New(*metrcisAddr, store.Metrics)
-	if err != nil {
-		panic(err)
-	}
-
-	server, err := dhstore.NewHttpServer(store, m, *listenAddr)
+	svr, err := server.NewHttpServer(store, m, *listenAddr)
 	if err != nil {
 		panic(err)
 	}
 
 	ctx := context.Background()
-	if err := server.Start(ctx); err != nil {
+	if err := svr.Start(ctx); err != nil {
 		panic(err)
 	}
 	if err := m.Start(ctx); err != nil {
@@ -103,7 +126,7 @@ func main() {
 	signal.Notify(c, os.Interrupt)
 	<-c
 	log.Info("Terminating...")
-	if err := server.Shutdown(ctx); err != nil {
+	if err := svr.Shutdown(ctx); err != nil {
 		log.Warnw("Failure occurred while shutting down server.", "err", err)
 	} else {
 		log.Info("Shut down server successfully.")

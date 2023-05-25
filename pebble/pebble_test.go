@@ -1,9 +1,10 @@
-package dhstore_test
+package pebble_test
 
 import (
 	"testing"
 
 	"github.com/ipni/dhstore"
+	"github.com/ipni/dhstore/pebble"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
@@ -31,7 +32,7 @@ func TestPebbleDHStore_MultihashCheck(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			subject, err := dhstore.NewPebbleDHStore(t.TempDir(), nil)
+			subject, err := pebble.NewPebbleDHStore(t.TempDir(), nil)
 			require.NoError(t, err)
 			defer subject.Close()
 

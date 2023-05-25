@@ -1,10 +1,11 @@
-package dhstore
+package pebble
 
 import (
 	"bytes"
 	"io"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/ipni/dhstore"
 )
 
 const valueKeysMergerName = "dhstore.v1.valueKeysMerger"
@@ -15,7 +16,7 @@ var (
 )
 
 type valueKeysValueMerger struct {
-	merges             []EncryptedValueKey
+	merges             []dhstore.EncryptedValueKey
 	reverse            bool
 	marshalledSizeHint int // Used as a hint to grow the buffer size during marshalling.
 	s                  *PebbleDHStore
@@ -112,15 +113,15 @@ func (v *valueKeysValueMerger) marshalMerges() ([]byte, io.Closer, error) {
 
 // maybeGrow grows the capacity of the given slice if necessary, such that it can fit n more
 // elements and returns the resulting slice.
-func maybeGrow(s []EncryptedValueKey, n int) []EncryptedValueKey {
+func maybeGrow(s []dhstore.EncryptedValueKey, n int) []dhstore.EncryptedValueKey {
 	const growthFactor = 2
 	l := len(s)
 	switch {
 	case n <= cap(s)-l:
 		return s
 	case l == 0:
-		return make([]EncryptedValueKey, 0, n*growthFactor)
+		return make([]dhstore.EncryptedValueKey, 0, n*growthFactor)
 	default:
-		return append(make([]EncryptedValueKey, 0, (l+n)*growthFactor), s...)
+		return append(make([]dhstore.EncryptedValueKey, 0, (l+n)*growthFactor), s...)
 	}
 }

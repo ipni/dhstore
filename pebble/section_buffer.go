@@ -1,4 +1,4 @@
-package dhstore
+package pebble
 
 import (
 	"errors"

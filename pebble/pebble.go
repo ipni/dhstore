@@ -1,4 +1,4 @@
-package dhstore
+package pebble
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	logging "github.com/ipfs/go-log/v2"
+	"github.com/ipni/dhstore"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 )
@@ -13,7 +14,7 @@ import (
 var (
 	logger = logging.Logger("store/pebble")
 
-	_ DHStore = (*PebbleDHStore)(nil)
+	_ dhstore.DHStore = (*PebbleDHStore)(nil)
 )
 
 const (
@@ -50,13 +51,13 @@ func NewPebbleDHStore(path string, opts *pebble.Options) (*PebbleDHStore, error)
 	return dhs, nil
 }
 
-func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk EncryptedValueKey) error {
+func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk dhstore.EncryptedValueKey) error {
 	dmh, err := multihash.Decode(mh)
 	if err != nil {
-		return ErrMultihashDecode{err: err, mh: mh}
+		return dhstore.ErrMultihashDecode{Err: err, Mh: mh}
 	}
 	if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
-		return ErrUnsupportedMulticodecCode{code: multicodec.Code(dmh.Code)}
+		return dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
 	}
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
@@ -73,7 +74,7 @@ func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk EncryptedValueKey
 	return s.db.Merge(mhk.buf, mevk, pebble.NoSync)
 }
 
-func (s *PebbleDHStore) PutMetadata(hvk HashedValueKey, em EncryptedMetadata) error {
+func (s *PebbleDHStore) PutMetadata(hvk dhstore.HashedValueKey, em dhstore.EncryptedMetadata) error {
 
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
@@ -85,13 +86,13 @@ func (s *PebbleDHStore) PutMetadata(hvk HashedValueKey, em EncryptedMetadata) er
 	return s.db.Set(hvkk.buf, em, pebble.NoSync)
 }
 
-func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]EncryptedValueKey, error) {
+func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValueKey, error) {
 	dmh, err := multihash.Decode(mh)
 	if err != nil {
-		return nil, ErrMultihashDecode{err: err, mh: mh}
+		return nil, dhstore.ErrMultihashDecode{Err: err, Mh: mh}
 	}
 	if dmh.Code != multihash.DBL_SHA2_256 {
-		return nil, ErrUnsupportedMulticodecCode{code: multicodec.Code(dmh.Code)}
+		return nil, dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
 	}
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
@@ -113,7 +114,7 @@ func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]EncryptedValueKey, err
 	return s.unmarshalEncryptedIndexKeys(vkb)
 }
 
-func (s *PebbleDHStore) GetMetadata(hvk HashedValueKey) (EncryptedMetadata, error) {
+func (s *PebbleDHStore) GetMetadata(hvk dhstore.HashedValueKey) (dhstore.EncryptedMetadata, error) {
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
 	hvkk, err := keygen.hashedValueKeyKey(hvk)
@@ -136,7 +137,7 @@ func (s *PebbleDHStore) GetMetadata(hvk HashedValueKey) (EncryptedMetadata, erro
 	return em, nil
 }
 
-func (s *PebbleDHStore) DeleteMetadata(hvk HashedValueKey) error {
+func (s *PebbleDHStore) DeleteMetadata(hvk dhstore.HashedValueKey) error {
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
 	hvkk, err := keygen.hashedValueKeyKey(hvk)
@@ -171,20 +172,20 @@ func (s *PebbleDHStore) Close() error {
 	return ferr
 }
 
-func (s *PebbleDHStore) marshalEncryptedIndexKey(evk EncryptedValueKey) ([]byte, io.Closer, error) {
+func (s *PebbleDHStore) marshalEncryptedIndexKey(evk dhstore.EncryptedValueKey) ([]byte, io.Closer, error) {
 	buf := s.p.leaseSectionBuff()
 	buf.writeSection(evk)
 	return buf.buf, buf, nil
 }
 
-func (s *PebbleDHStore) unmarshalEncryptedIndexKeys(b []byte) ([]EncryptedValueKey, error) {
+func (s *PebbleDHStore) unmarshalEncryptedIndexKeys(b []byte) ([]dhstore.EncryptedValueKey, error) {
 	if len(b) == 0 {
 		return nil, nil
 	}
 	buf := s.p.leaseSectionBuff()
 	defer buf.Close()
 	buf.wrap(b)
-	evks := make([]EncryptedValueKey, 0, encValueKeysCap)
+	evks := make([]dhstore.EncryptedValueKey, 0, encValueKeysCap)
 	var l int
 	for buf.remaining() != 0 {
 		next, err := buf.copyNextSection()
@@ -194,7 +195,7 @@ func (s *PebbleDHStore) unmarshalEncryptedIndexKeys(b []byte) ([]EncryptedValueK
 		evks = append(evks, next)
 		l++
 		if cap(evks)-l <= 0 {
-			evks = append(make([]EncryptedValueKey, 0, (l+encValueKeysCap)*encValueKeysGrowthFactor), evks...)
+			evks = append(make([]dhstore.EncryptedValueKey, 0, (l+encValueKeysCap)*encValueKeysGrowthFactor), evks...)
 		}
 	}
 	return evks, nil
