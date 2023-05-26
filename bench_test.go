@@ -12,26 +12,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	store = "yugabyte"
+)
+
 func BenchmarkDHStore_PutMultihashes(b *testing.B) {
 	// 200 is chosen as approximation for enc(peerID + contextID) length
-	benchmarkPutMultihashes(b, 500_000, 200)
+	benchmarkPutMultihashes(b, 100_000, 200)
 }
 
 func BenchmarkDHStore_GetMultihashes(b *testing.B) {
-	benchmarkGetMultihashes(b, 500_000, 200)
+	benchmarkGetMultihashes(b, 100_000, 200)
 }
 
 func BenchmarkDHStore_PutMetadata(b *testing.B) {
 	// 32 is chosen as a length of a hash, 113 as an approximation for enc(metadata) length
 	// when it's not bitswap
-	benchmarkPutMetadata(b, 500_000, 32, 113)
+	benchmarkPutMetadata(b, 10_000, 32, 113)
 }
 
 func BenchmarkDHStore_GetMetadata(b *testing.B) {
-	benchmarkGetMetadatas(b, 500_000, 32, 113)
+	benchmarkGetMetadatas(b, 10_000, 32, 113)
 }
 
-func newDHStore(b *testing.B) *dhstore.PebbleDHStore {
+func newDHStore(b *testing.B) dhstore.DHStore {
+	if store == "yugabyte" {
+		return newYugabyteDHStore(b)
+	}
+	return newPebbleDHStore(b)
+}
+
+func newPebbleDHStore(b *testing.B) dhstore.DHStore {
 	opts := &pebble.Options{
 		BytesPerSync:                10 << 20, // 10 MiB
 		WALBytesPerSync:             10 << 20, // 10 MiB
@@ -64,6 +75,12 @@ func newDHStore(b *testing.B) *dhstore.PebbleDHStore {
 	opts.Levels[numLevels-1].FilterPolicy = nil
 	opts.Cache = pebble.NewCache(1 << 30) // 1 GiB
 	d, err := dhstore.NewPebbleDHStore(b.TempDir(), opts)
+	require.NoError(b, err)
+	return d
+}
+
+func newYugabyteDHStore(b *testing.B) dhstore.DHStore {
+	d, err := dhstore.NewYugabyteDHStore()
 	require.NoError(b, err)
 	return d
 }
@@ -159,7 +176,7 @@ func benchmarkGetMetadatas(b *testing.B, n, hvkLen, mdLen int) {
 	b.StopTimer()
 }
 
-func getMultihashes(b *testing.B, mhs []multihash.Multihash, store *dhstore.PebbleDHStore) {
+func getMultihashes(b *testing.B, mhs []multihash.Multihash, store dhstore.DHStore) {
 	for _, mh := range mhs {
 		evks, err := store.Lookup(mh)
 		require.NoError(b, err)
@@ -167,21 +184,21 @@ func getMultihashes(b *testing.B, mhs []multihash.Multihash, store *dhstore.Pebb
 	}
 }
 
-func putMultihashes(b *testing.B, mhs []multihash.Multihash, vks [][]byte, store *dhstore.PebbleDHStore) {
+func putMultihashes(b *testing.B, mhs []multihash.Multihash, vks [][]byte, store dhstore.DHStore) {
 	for i, mh := range mhs {
 		err := store.MergeIndex(mh, vks[i])
 		require.NoError(b, err)
 	}
 }
 
-func putMetadatas(b *testing.B, hvks, metadatas [][]byte, store *dhstore.PebbleDHStore) {
+func putMetadatas(b *testing.B, hvks, metadatas [][]byte, store dhstore.DHStore) {
 	for i, hvk := range hvks {
 		err := store.PutMetadata(hvk, metadatas[i])
 		require.NoError(b, err)
 	}
 }
 
-func getMetadatas(b *testing.B, hvks [][]byte, store *dhstore.PebbleDHStore) {
+func getMetadatas(b *testing.B, hvks [][]byte, store dhstore.DHStore) {
 	for _, hvk := range hvks {
 		md, err := store.GetMetadata(hvk)
 		require.NoError(b, err)
