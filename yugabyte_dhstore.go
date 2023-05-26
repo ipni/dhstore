@@ -64,28 +64,16 @@ func NewYugabyteDHStore(c *yugabyteConfig) (DHStore, error) {
 }
 
 func (y *yugabyteDHStore) createDatabase() error {
-	stmt := `DROP TABLE IF EXISTS Multihash`
+	stmt := `CREATE TABLE IF NOT EXISTS Multihash (
+                        mh BYTEA PRIMARY KEY,
+                        evks BYTEA[])`
+
 	_, err := y.db.Exec(stmt)
 	if err != nil {
 		return err
 	}
 
-	stmt = `CREATE TABLE Multihash (
-                        mh BYTEA PRIMARY KEY,
-                        evks BYTEA[])`
-
-	_, err = y.db.Exec(stmt)
-	if err != nil {
-		return err
-	}
-
-	stmt = `DROP TABLE IF EXISTS Metadata`
-	_, err = y.db.Exec(stmt)
-	if err != nil {
-		return err
-	}
-
-	stmt = `CREATE TABLE Metadata (
+	stmt = `CREATE TABLE IF NOT EXISTS  Metadata (
                         hvk BYTEA PRIMARY KEY,
                         emd BYTEA)`
 
