@@ -27,63 +27,51 @@ func main() {
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrcis HTTP server listen address.")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
+	yugaHost := flag.String("yugaHost", "127.0.0.1", "Host of the yugabyte database.")
+	yugaPort := flag.Int("yugaHost", 5433, "Port of the yugabyte database.")
+	yugaDBName := flag.String("yugaDBName", "yugabyte", "YugabyteDB name.")
+	yugaDBUser := flag.String("yugaDBUser", "yugabyte", "YugabyteDB user.")
+	yugaDBPassword := flag.String("yugaDBPassword", "yugabyte", "YugabyteDB user password.")
+	yugaSSLMode := flag.String("yugaSSLMode", "disable", "YugabyteDB SSL Mode.")
+	yugaSSLRootCert := flag.String("yugaSSLRootCert", "", "YugabyteDB SSL Root Cert.")
+	isPebble := flag.Bool("isPebble", true, "Use pebble or yugabyte store")
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
+
 	flag.Parse()
 
 	if _, set := os.LookupEnv("GOLOG_LOG_LEVEL"); !set {
 		_ = logging.SetLogLevel("*", *llvl)
 	}
 
-	parsedBlockCacheSize, err := parseBlockCacheSize(*blockCacheSize)
-	if err != nil {
-		panic(err)
-	}
+	var store dhstore.DHStore
+	var m *metrics.Metrics
+	var err error
 
-	// Default options copied from cockroachdb with the addition of 1GiB cache.
-	// See:
-	// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
-	opts := &pebble.Options{
-		BytesPerSync:                10 << 20, // 10 MiB
-		WALBytesPerSync:             10 << 20, // 10 MiB
-		MaxConcurrentCompactions:    10,
-		MemTableSize:                64 << 20, // 64 MiB
-		MemTableStopWritesThreshold: 4,
-		LBaseMaxBytes:               64 << 20, // 64 MiB
-		L0CompactionThreshold:       2,
-		L0StopWritesThreshold:       1000,
-		DisableWAL:                  *dwal,
-		WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
-	}
-
-	opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
-	opts.Experimental.MinDeletionRate = 128 << 20   // 128 MiB
-
-	const numLevels = 7
-	opts.Levels = make([]pebble.LevelOptions, numLevels)
-	for i := 0; i < numLevels; i++ {
-		l := &opts.Levels[i]
-		l.BlockSize = 32 << 10       // 32 KiB
-		l.IndexBlockSize = 256 << 10 // 256 KiB
-		l.FilterPolicy = bloom.FilterPolicy(10)
-		l.FilterType = pebble.TableFilter
-		if i > 0 {
-			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+	if *isPebble {
+		var parsedBlockCacheSize uint64
+		parsedBlockCacheSize, err = parseBlockCacheSize(*blockCacheSize)
+		if err != nil {
+			panic(err)
 		}
-		l.EnsureDefaults()
-	}
-	opts.Levels[numLevels-1].FilterPolicy = nil
-	opts.Cache = pebble.NewCache(int64(parsedBlockCacheSize))
-
-	path := filepath.Clean(*storePath)
-	store, err := dhstore.NewPebbleDHStore(path, opts)
-	if err != nil {
-		panic(err)
-	}
-	log.Infow("Store opened.", "path", path)
-
-	m, err := metrics.New(*metrcisAddr, store.Metrics)
-	if err != nil {
-		panic(err)
+		store, err = newPebbleDHStore(*dwal, int64(parsedBlockCacheSize), *storePath)
+		if err != nil {
+			panic(err)
+		}
+		log.Infow("Pebble store opened.", "path", storePath)
+		m, err = metrics.New(*metrcisAddr, store.(*dhstore.PebbleDHStore).Metrics)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		store, err = newYugabyteDHStore(*yugaHost, *yugaPort, *yugaDBName, *yugaDBUser, *yugaDBPassword, *yugaSSLMode, *yugaSSLRootCert)
+		if err != nil {
+			panic(err)
+		}
+		m, err = metrics.New(*metrcisAddr, nil)
+		if err != nil {
+			panic(err)
+		}
+		log.Info("YugabyteDB client initialised.")
 	}
 
 	server, err := dhstore.NewHttpServer(store, m, *listenAddr)
@@ -119,6 +107,75 @@ func main() {
 	} else {
 		log.Info("Closed store successfully.")
 	}
+}
+
+func newPebbleDHStore(dwal bool, parsedBlockCacheSize int64, storePath string) (dhstore.DHStore, error) {
+	// Default options copied from cockroachdb with the addition of 1GiB cache.
+	// See:
+	// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
+	opts := &pebble.Options{
+		BytesPerSync:                10 << 20, // 10 MiB
+		WALBytesPerSync:             10 << 20, // 10 MiB
+		MaxConcurrentCompactions:    10,
+		MemTableSize:                64 << 20, // 64 MiB
+		MemTableStopWritesThreshold: 4,
+		LBaseMaxBytes:               64 << 20, // 64 MiB
+		L0CompactionThreshold:       2,
+		L0StopWritesThreshold:       1000,
+		DisableWAL:                  dwal,
+		WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
+	}
+
+	opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
+	opts.Experimental.MinDeletionRate = 128 << 20   // 128 MiB
+
+	const numLevels = 7
+	opts.Levels = make([]pebble.LevelOptions, numLevels)
+	for i := 0; i < numLevels; i++ {
+		l := &opts.Levels[i]
+		l.BlockSize = 32 << 10       // 32 KiB
+		l.IndexBlockSize = 256 << 10 // 256 KiB
+		l.FilterPolicy = bloom.FilterPolicy(10)
+		l.FilterType = pebble.TableFilter
+		if i > 0 {
+			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
+		}
+		l.EnsureDefaults()
+	}
+	opts.Levels[numLevels-1].FilterPolicy = nil
+	opts.Cache = pebble.NewCache(int64(parsedBlockCacheSize))
+
+	path := filepath.Clean(storePath)
+	return dhstore.NewPebbleDHStore(path, opts)
+}
+
+func newYugabyteDHStore(yugaHost string, yugaPort int, yugaDBName, yugaDBUser, yugaDBPassword, yugaSSLMode, yugaSSLRootCert string) (dhstore.DHStore, error) {
+	c := dhstore.NewYugabyteConfig()
+	if len(yugaHost) > 0 {
+		c.Host = yugaHost
+	}
+
+	if yugaPort != 0 {
+		c.Port = yugaPort
+	}
+
+	if len(yugaDBName) > 0 {
+		c.DBName = yugaDBName
+	}
+	if len(yugaDBUser) > 0 {
+		c.DBUser = yugaDBUser
+	}
+	if len(yugaDBPassword) > 0 {
+		c.DBPassword = yugaDBPassword
+	}
+	if len(yugaSSLMode) > 0 {
+		c.SSLMode = yugaSSLMode
+	}
+	if len(yugaSSLRootCert) > 0 {
+		c.SSLRootCert = yugaSSLRootCert
+	}
+
+	return dhstore.NewYugabyteDHStore(c)
 }
 
 func parseBlockCacheSize(str string) (uint64, error) {

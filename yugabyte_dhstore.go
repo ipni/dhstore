@@ -8,29 +8,44 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-const (
-	host        = "127.0.0.1"
-	port        = 5433
-	dbName      = "yugabyte"
-	dbUser      = "yugabyte"
-	dbPassword  = "yugabyte"
-	sslMode     = "disable"
-	sslRootCert = ""
-)
+type yugabyteConfig struct {
+	Host        string
+	Port        int
+	DBName      string
+	DBUser      string
+	DBPassword  string
+	SSLMode     string
+	SSLRootCert string
+}
+
+func NewYugabyteConfig() *yugabyteConfig {
+	return &yugabyteConfig{
+		Host:        "127.0.0.1",
+		Port:        5433,
+		DBName:      "yugabyte",
+		DBUser:      "yugabyte",
+		DBPassword:  "yugabyte",
+		SSLMode:     "disable",
+		SSLRootCert: "",
+	}
+}
 
 type yugabyteDHStore struct {
 	db *sql.DB
 }
 
-func NewYugabyteDHStore() (DHStore, error) {
+func NewYugabyteDHStore(c *yugabyteConfig) (DHStore, error) {
+	if c == nil {
+		c = NewYugabyteConfig()
+	}
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s",
-		host, port, dbUser, dbPassword, dbName)
+		c.Host, c.Port, c.DBUser, c.DBPassword, c.DBName)
 
-	if sslMode != "" {
-		psqlInfo += fmt.Sprintf(" sslmode=%s", sslMode)
+	if c.SSLMode != "" {
+		psqlInfo += fmt.Sprintf(" sslmode=%s", c.SSLMode)
 
-		if sslRootCert != "" {
-			psqlInfo += fmt.Sprintf(" sslrootcert=%s", sslRootCert)
+		if c.SSLRootCert != "" {
+			psqlInfo += fmt.Sprintf(" sslrootcert=%s", c.SSLRootCert)
 		}
 	}
 
@@ -140,16 +155,15 @@ func (y *yugabyteDHStore) GetMetadata(hvk HashedValueKey) (EncryptedMetadata, er
 	}
 
 	defer rows.Close()
-	var emd []byte
-	for rows.Next() {
-		err = rows.Scan(&emd)
-		if err != nil {
-			return nil, err
-		}
-		return emd, nil
+	if !rows.Next() {
+		return nil, nil
 	}
-
-	return nil, nil
+	var emd []byte
+	err = rows.Scan(&emd)
+	if err != nil {
+		return nil, err
+	}
+	return emd, nil
 }
 
 func (y *yugabyteDHStore) Close() error {

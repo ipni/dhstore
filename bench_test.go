@@ -13,26 +13,27 @@ import (
 )
 
 const (
+	// set to "pebble" for pebble-backed implementation
 	store = "yugabyte"
 )
 
 func BenchmarkDHStore_PutMultihashes(b *testing.B) {
 	// 200 is chosen as approximation for enc(peerID + contextID) length
-	benchmarkPutMultihashes(b, 100_000, 200)
+	benchmarkPutMultihashes(b, 500_000, 200)
 }
 
 func BenchmarkDHStore_GetMultihashes(b *testing.B) {
-	benchmarkGetMultihashes(b, 100_000, 200)
+	benchmarkGetMultihashes(b, 500_000, 200)
 }
 
 func BenchmarkDHStore_PutMetadata(b *testing.B) {
 	// 32 is chosen as a length of a hash, 113 as an approximation for enc(metadata) length
 	// when it's not bitswap
-	benchmarkPutMetadata(b, 10_000, 32, 113)
+	benchmarkPutMetadata(b, 500_000, 32, 113)
 }
 
 func BenchmarkDHStore_GetMetadata(b *testing.B) {
-	benchmarkGetMetadatas(b, 10_000, 32, 113)
+	benchmarkGetMetadatas(b, 500_000, 32, 113)
 }
 
 func newDHStore(b *testing.B) dhstore.DHStore {
@@ -80,7 +81,7 @@ func newPebbleDHStore(b *testing.B) dhstore.DHStore {
 }
 
 func newYugabyteDHStore(b *testing.B) dhstore.DHStore {
-	d, err := dhstore.NewYugabyteDHStore()
+	d, err := dhstore.NewYugabyteDHStore(nil)
 	require.NoError(b, err)
 	return d
 }
