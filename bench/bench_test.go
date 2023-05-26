@@ -169,10 +169,12 @@ func getMultihashes(b *testing.B, mhs []multihash.Multihash, store dhstore.DHSto
 }
 
 func putMultihashes(b *testing.B, mhs []multihash.Multihash, vks [][]byte, store dhstore.DHStore) {
+	indexes := make([]dhstore.Index, 0, len(mhs))
 	for i, mh := range mhs {
-		err := store.MergeIndex(mh, vks[i])
-		require.NoError(b, err)
+		indexes = append(indexes, dhstore.Index{Key: mh, Value: vks[i]})
 	}
+	err := store.MergeIndexes(indexes)
+	require.NoError(b, err)
 }
 
 func putMetadatas(b *testing.B, hvks, metadatas [][]byte, store dhstore.DHStore) {

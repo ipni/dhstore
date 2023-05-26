@@ -62,49 +62,56 @@ func NewFDBDHStore(o ...Option) (*FDBDHStore, error) {
 	}, nil
 }
 
-func (f *FDBDHStore) MergeIndex(mh multihash.Multihash, vk dhstore.EncryptedValueKey) error {
-	dmh, err := multihash.Decode(mh)
-	if err != nil {
-		return dhstore.ErrMultihashDecode{Err: err, Mh: mh}
-	}
-	if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
-		return dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
-	}
-	if dmh.Length != 32 {
-		return dhstore.ErrMultihashDecode{Err: errMultihashDigestLength, Mh: mh}
-	}
-	if len(vk) > fdbMaxValueBytes {
-		return fmt.Errorf("value key cannot be larger than 100 KB, got: %d", len(vk))
-	}
-	_, err = f.db.Transact(func(transaction fdb.Transaction) (any, error) {
-		// Check if vk is longer than the allowed max key prefix. If it is, then
-		// hash it and use the original as the value associated to the key.
-		// If not, then use vk as is as the prefix and leave value empty.
-		// This strategy will result in:
-		//  1. lower disk utilisation and
-		//  2. lower CPU consumption
-		// by opportunistically avoiding:
-		// - the re-hash of vk just to get a short key prefix, and
-		// - the double storage of vk when it is the same as prefix.
-		// On lookup, we then check if the value is empty and if it is we return the prefix.
-		var prefix, value []byte
-		if len(vk) > fdbMaxKeyPrefixLen {
-			var err error
-			prefix, err = f.hash(vk)
+func (f *FDBDHStore) MergeIndexes(indexes []dhstore.Index) error {
+	_, err := f.db.Transact(func(transaction fdb.Transaction) (any, error) {
+		for _, index := range indexes {
+			mh := index.Key
+			vk := index.Value
+
+			// Fail fast on invalid multihashes.
+			// TODO: make fail-fast optional.
+			dmh, err := multihash.Decode(mh)
+			if err != nil {
+				return nil, dhstore.ErrMultihashDecode{Err: err, Mh: mh}
+			}
+			if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
+				return nil, dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
+			}
+			if dmh.Length != 32 {
+				return nil, dhstore.ErrMultihashDecode{Err: errMultihashDigestLength, Mh: mh}
+			}
+			if len(vk) > fdbMaxValueBytes {
+				return nil, fmt.Errorf("value key cannot be larger than 100 KB, got: %d", len(vk))
+			}
+			// Check if vk is longer than the allowed max key prefix. If it is, then
+			// hash it and use the original as the value associated to the key.
+			// If not, then use vk as is as the prefix and leave value empty.
+			// This strategy will result in:
+			//  1. lower disk utilisation and
+			//  2. lower CPU consumption
+			// by opportunistically avoiding:
+			// - the re-hash of vk just to get a short key prefix, and
+			// - the double storage of vk when it is the same as prefix.
+			// On lookup, we then check if the value is empty and if it is we return the prefix.
+			var prefix, value []byte
+			if len(vk) > fdbMaxKeyPrefixLen {
+				var err error
+				prefix, err = f.hash(vk)
+				if err != nil {
+					return nil, err
+				}
+				value = vk
+			} else {
+				prefix = vk
+			}
+
+			// Store all multihash mappings under a dedicated directory for future extensibility.
+			mhdir, err := directory.CreateOrOpen(transaction, []string{fdbMultihashDirectory}, nil)
 			if err != nil {
 				return nil, err
 			}
-			value = vk
-		} else {
-			prefix = vk
+			transaction.Set(mhdir.Pack(tuple.Tuple{dmh.Digest, prefix}), value)
 		}
-
-		// Store all multihash mappings under a dedicated directory for future extensibility.
-		mhdir, err := directory.CreateOrOpen(transaction, []string{fdbMultihashDirectory}, nil)
-		if err != nil {
-			return nil, err
-		}
-		transaction.Set(mhdir.Pack(tuple.Tuple{dmh.Digest, prefix}), value)
 		return nil, nil
 	})
 	return err

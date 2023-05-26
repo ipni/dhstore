@@ -7,11 +7,7 @@ import (
 
 type (
 	MergeIndexRequest struct {
-		Merges []Merge `json:"merges"`
-	}
-	Merge struct {
-		Key   multihash.Multihash       `json:"key"`
-		Value dhstore.EncryptedValueKey `json:"value"`
+		Merges []dhstore.Index `json:"merges"`
 	}
 	PutMetadataRequest struct {
 		Key   dhstore.HashedValueKey    `json:"key"`

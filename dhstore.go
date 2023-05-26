@@ -10,9 +10,13 @@ type (
 	EncryptedValueKey []byte
 	EncryptedMetadata []byte
 	HashedValueKey    []byte
-	DHStore           interface {
+	Index             struct {
+		Key   multihash.Multihash `json:"key"`
+		Value EncryptedValueKey   `json:"value"`
+	}
+	DHStore interface {
 		io.Closer
-		MergeIndex(multihash.Multihash, EncryptedValueKey) error
+		MergeIndexes([]Index) error
 		PutMetadata(HashedValueKey, EncryptedMetadata) error
 		Lookup(multihash.Multihash) ([]EncryptedValueKey, error)
 		GetMetadata(HashedValueKey) (EncryptedMetadata, error)
