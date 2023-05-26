@@ -51,27 +51,36 @@ func NewPebbleDHStore(path string, opts *pebble.Options) (*PebbleDHStore, error)
 	return dhs, nil
 }
 
-func (s *PebbleDHStore) MergeIndex(mh multihash.Multihash, evk dhstore.EncryptedValueKey) error {
-	dmh, err := multihash.Decode(mh)
-	if err != nil {
-		return dhstore.ErrMultihashDecode{Err: err, Mh: mh}
-	}
-	if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
-		return dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
-	}
+func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
-	mhk, err := keygen.multihashKey(mh)
-	if err != nil {
-		return err
+	batch := s.db.NewBatch()
+	for _, index := range indexes {
+		dmh, err := multihash.Decode(index.Key)
+		if err != nil {
+			return dhstore.ErrMultihashDecode{Err: err, Mh: index.Key}
+		}
+		if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
+			return dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
+		}
+		mhk, err := keygen.multihashKey(index.Key)
+		if err != nil {
+			return err
+		}
+		mevk, closer, err := s.marshalEncryptedIndexKey(index.Value)
+		if err != nil {
+			_ = mhk.Close()
+			return err
+		}
+		if err := batch.Merge(mhk.buf, mevk, pebble.NoSync); err != nil {
+			_ = mhk.Close()
+			_ = closer.Close()
+			return err
+		}
+		_ = mhk.Close()
+		_ = closer.Close()
 	}
-	defer mhk.Close()
-	mevk, closer, err := s.marshalEncryptedIndexKey(evk)
-	if err != nil {
-		return err
-	}
-	defer closer.Close()
-	return s.db.Merge(mhk.buf, mevk, pebble.NoSync)
+	return batch.Commit(pebble.NoSync)
 }
 
 func (s *PebbleDHStore) PutMetadata(hvk dhstore.HashedValueKey, em dhstore.EncryptedMetadata) error {

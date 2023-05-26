@@ -130,7 +130,7 @@ func TestNewHttpServeMux(t *testing.T) {
 			onStore: func(t *testing.T, store dhstore.DHStore) {
 				mh, err := multihash.FromB58String("2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82")
 				require.NoError(t, err)
-				require.NoError(t, store.MergeIndex(mh, []byte("fish")))
+				require.NoError(t, store.MergeIndexes([]dhstore.Index{{Key: mh, Value: []byte("fish")}}))
 			},
 			onMethod:     http.MethodGet,
 			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
@@ -183,9 +183,11 @@ func TestNewHttpServeMux(t *testing.T) {
 			onStore: func(t *testing.T, store dhstore.DHStore) {
 				mh, err := multihash.FromB58String("2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82")
 				require.NoError(t, err)
-				require.NoError(t, store.MergeIndex(mh, []byte("fish")))
-				require.NoError(t, store.MergeIndex(mh, []byte("lobster")))
-				require.NoError(t, store.MergeIndex(mh, []byte("undadasea")))
+				require.NoError(t, store.MergeIndexes([]dhstore.Index{
+					{Key: mh, Value: []byte("fish")},
+					{Key: mh, Value: []byte("lobster")},
+					{Key: mh, Value: []byte("undadasea")},
+				}))
 			},
 			onMethod:     http.MethodGet,
 			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",

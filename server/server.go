@@ -132,14 +132,9 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 	if len(mir.Merges) == 0 {
 		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
 	}
-
-	// TODO: Use pebble batch which will require interface changes.
-	//       But no big deal for now because every write to pebble is by NoSync.
-	for _, merge := range mir.Merges {
-		if err := s.dhs.MergeIndex(merge.Key, merge.Value); err != nil {
-			s.handleError(w, err)
-			return
-		}
+	if err := s.dhs.MergeIndexes(mir.Merges); err != nil {
+		s.handleError(w, err)
+		return
 	}
 	logger.Infow("Finished putting multihashes", "count", len(mir.Merges))
 	if len(mir.Merges) != 0 {
