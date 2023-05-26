@@ -22,26 +22,33 @@ var (
 	fdbHasherPool            sync.Pool
 	errMultihashDigestLength = errors.New("multihash digest must be exactly 32 bytes long")
 	errMetadataKeyTooLong    = errors.New("key must be at most 32 bytes long")
+
+	multihashDirectoryPath = []string{"mh"}
+	metadataDirectoryPath  = []string{"md"}
 )
 
 const (
-	fdbMaxValueBytes      = 100_000 // 100 KB
-	fdbBlake3HashLength   = 32
-	fdbMultihashDirectory = "mh"
-	fdbMetadataDirectory  = "md"
-	// fdbMaxKeyPrefixLen is the threshold at which key prefixes are hashed if they are larger. Otherwise,
+	maxValueBytes    = 100_000 // 100 KB
+	blake3HashLength = 32
+
+	// maxKeyPrefixLen is the threshold at which key prefixes are hashed if they are larger. Otherwise,
 	// the prefix is used as is. When used in the context of metadata keys, it represents the max accepted
 	// length for metadata key.
-	fdbMaxKeyPrefixLen = 32
+	maxKeyPrefixLen = 32
 )
 
 type FDBDHStore struct {
 	db fdb.Database
+
+	// mhdir is the directory subspace used to store all multihash mappings under a dedicated directory for future extensibility.
+	mhdir directory.DirectorySubspace
+	// mddir is the directory subspace used to store all metadata mappings under a dedicated directory for future extensibility.
+	mddir directory.DirectorySubspace
 }
 
 func init() {
 	fdbHasherPool.New = func() any {
-		return blake3.New(fdbBlake3HashLength, nil)
+		return blake3.New(blake3HashLength, nil)
 	}
 }
 
@@ -53,13 +60,17 @@ func NewFDBDHStore(o ...Option) (*FDBDHStore, error) {
 	if err := fdb.APIVersion(opts.apiVersion); err != nil {
 		return nil, err
 	}
-	db, err := fdb.OpenDatabase(opts.clusterFile)
-	if err != nil {
-		panic(err)
+	var dhfdb FDBDHStore
+	if dhfdb.db, err = fdb.OpenDatabase(opts.clusterFile); err != nil {
+		return nil, err
 	}
-	return &FDBDHStore{
-		db: db,
-	}, nil
+	if dhfdb.mhdir, err = directory.CreateOrOpen(dhfdb.db, multihashDirectoryPath, nil); err != nil {
+		return nil, err
+	}
+	if dhfdb.mddir, err = directory.CreateOrOpen(dhfdb.db, metadataDirectoryPath, nil); err != nil {
+		return nil, err
+	}
+	return &dhfdb, nil
 }
 
 func (f *FDBDHStore) MergeIndexes(indexes []dhstore.Index) error {
@@ -80,7 +91,7 @@ func (f *FDBDHStore) MergeIndexes(indexes []dhstore.Index) error {
 			if dmh.Length != 32 {
 				return nil, dhstore.ErrMultihashDecode{Err: errMultihashDigestLength, Mh: mh}
 			}
-			if len(vk) > fdbMaxValueBytes {
+			if len(vk) > maxValueBytes {
 				return nil, fmt.Errorf("value key cannot be larger than 100 KB, got: %d", len(vk))
 			}
 			// Check if vk is longer than the allowed max key prefix. If it is, then
@@ -94,7 +105,7 @@ func (f *FDBDHStore) MergeIndexes(indexes []dhstore.Index) error {
 			// - the double storage of vk when it is the same as prefix.
 			// On lookup, we then check if the value is empty and if it is we return the prefix.
 			var prefix, value []byte
-			if len(vk) > fdbMaxKeyPrefixLen {
+			if len(vk) > maxKeyPrefixLen {
 				var err error
 				prefix, err = f.hash(vk)
 				if err != nil {
@@ -104,13 +115,8 @@ func (f *FDBDHStore) MergeIndexes(indexes []dhstore.Index) error {
 			} else {
 				prefix = vk
 			}
-
-			// Store all multihash mappings under a dedicated directory for future extensibility.
-			mhdir, err := directory.CreateOrOpen(transaction, []string{fdbMultihashDirectory}, nil)
-			if err != nil {
-				return nil, err
-			}
-			transaction.Set(mhdir.Pack(tuple.Tuple{dmh.Digest, prefix}), value)
+			key := f.mhdir.Pack(tuple.Tuple{dmh.Digest, prefix})
+			transaction.Set(key, value)
 		}
 		return nil, nil
 	})
@@ -131,19 +137,15 @@ func (f *FDBDHStore) hash(vk []byte) ([]byte, error) {
 }
 
 func (f *FDBDHStore) PutMetadata(vk dhstore.HashedValueKey, md dhstore.EncryptedMetadata) error {
-	if len(vk) > fdbMaxKeyPrefixLen {
+	if len(vk) > maxKeyPrefixLen {
 		return dhstore.ErrInvalidHashedValueKey{Key: vk, Err: errMetadataKeyTooLong}
 	}
-	if len(md) > fdbMaxValueBytes {
+	if len(md) > maxValueBytes {
 		return fmt.Errorf("value key cannot be larger than 100 KB, got: %d", len(vk))
 	}
 	_, err := f.db.Transact(func(transaction fdb.Transaction) (any, error) {
-		// Store all metadata mappings under a dedicated directory for future extensibility.
-		mddir, err := directory.CreateOrOpen(transaction, []string{fdbMetadataDirectory}, nil)
-		if err != nil {
-			return nil, err
-		}
-		transaction.Set(mddir.Pack(tuple.Tuple{[]byte(vk)}), md)
+		key := f.mddir.Pack(tuple.Tuple{[]byte(vk)})
+		transaction.Set(key, md)
 		return nil, nil
 	})
 	return err
@@ -160,14 +162,8 @@ func (f *FDBDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValueKey
 	if dmh.Length != 32 {
 		return nil, dhstore.ErrMultihashDecode{Err: errMultihashDigestLength, Mh: mh}
 	}
-	v, err := f.db.Transact(func(transaction fdb.Transaction) (any, error) {
-
-		mhdir, err := directory.CreateOrOpen(transaction, []string{fdbMultihashDirectory}, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		vks := transaction.GetRange(mhdir.Sub(dmh.Digest), fdb.RangeOptions{})
+	v, err := f.db.ReadTransact(func(transaction fdb.ReadTransaction) (any, error) {
+		vks := transaction.GetRange(f.mhdir.Sub(dmh.Digest), fdb.RangeOptions{})
 		// TODO: implement streaming variation since we are dealing with a streaming iterator anyway.
 		iterator := vks.Iterator()
 		var evks []dhstore.EncryptedValueKey
@@ -182,7 +178,7 @@ func (f *FDBDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValueKey
 			// Check if value is empty, and if so then it means the original vk was shorter than the max
 			// accepted key prefix and was used as is. Therefore, the key suffix is the value.
 			if len(kv.Value) == 0 {
-				unpack, err := mhdir.Unpack(kv.Key)
+				unpack, err := f.mhdir.Unpack(kv.Key)
 				if err != nil {
 					latestErr = err
 					logger.Errorw("failed to unpack key to extract value for multihash", "mh", mh.B58String(), "err", err)
@@ -204,7 +200,6 @@ func (f *FDBDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValueKey
 		}
 		return evks, latestErr
 	})
-
 	if err != nil {
 		// If error has occurred but we found some result, return whatever we found.
 		if v == nil {
@@ -218,7 +213,6 @@ func (f *FDBDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValueKey
 		}
 		return evks, nil
 	}
-
 	evks, ok := v.([]dhstore.EncryptedValueKey)
 	switch {
 	case !ok:
@@ -232,36 +226,33 @@ func (f *FDBDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValueKey
 }
 
 func (f *FDBDHStore) GetMetadata(vk dhstore.HashedValueKey) (dhstore.EncryptedMetadata, error) {
-	if len(vk) > fdbMaxKeyPrefixLen {
+	if len(vk) > maxKeyPrefixLen {
 		return nil, dhstore.ErrInvalidHashedValueKey{Key: vk, Err: errMetadataKeyTooLong}
 	}
-	v, err := f.db.Transact(func(transaction fdb.Transaction) (any, error) {
-		mddir, err := directory.CreateOrOpen(transaction, []string{fdbMetadataDirectory}, nil)
-		if err != nil {
-			return nil, err
-		}
-		return transaction.Get(mddir.Pack(tuple.Tuple{[]byte(vk)})), nil
+	v, err := f.db.ReadTransact(func(transaction fdb.ReadTransaction) (any, error) {
+		get := transaction.Get(f.mddir.Pack(tuple.Tuple{[]byte(vk)}))
+		return get.Get()
 	})
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, err
+	case v == nil:
+		return nil, nil
+	default:
+		md, ok := v.([]byte)
+		if !ok {
+			return nil, errors.New("unexpected result type")
+		}
+		return md, nil
 	}
-	fbs, ok := v.(fdb.FutureByteSlice)
-	if !ok {
-		return nil, errors.New("unexpected result type")
-	}
-	return fbs.Get()
 }
 
 func (f *FDBDHStore) DeleteMetadata(vk dhstore.HashedValueKey) error {
-	if len(vk) > fdbMaxKeyPrefixLen {
+	if len(vk) > maxKeyPrefixLen {
 		return dhstore.ErrInvalidHashedValueKey{Key: vk, Err: errMetadataKeyTooLong}
 	}
 	_, err := f.db.Transact(func(transaction fdb.Transaction) (any, error) {
-		mddir, err := directory.CreateOrOpen(transaction, []string{fdbMetadataDirectory}, nil)
-		if err != nil {
-			return nil, err
-		}
-		transaction.Clear(mddir.Pack(tuple.Tuple{[]byte(vk)}))
+		transaction.Clear(f.mddir.Pack(tuple.Tuple{[]byte(vk)}))
 		return nil, nil
 	})
 	return err
