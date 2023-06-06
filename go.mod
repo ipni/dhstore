@@ -9,8 +9,8 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20220726144858-a78491c0086f
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/mr-tron/base58 v1.2.0
-	github.com/multiformats/go-multicodec v0.7.0
-	github.com/multiformats/go-multihash v0.2.1
+	github.com/multiformats/go-multicodec v0.9.0
+	github.com/multiformats/go-multihash v0.2.2
 	github.com/multiformats/go-varint v0.0.7
 	github.com/prometheus/client_golang v1.14.0
 	github.com/stretchr/testify v1.8.1
