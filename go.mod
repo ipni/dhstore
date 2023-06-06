@@ -49,7 +49,6 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/stretchr/objx v0.5.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.11.1 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
