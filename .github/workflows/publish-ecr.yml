@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-
+      - ivan/test-different-compaction-options
 jobs:
   publisher:
     if: ${{ github.event.pusher.name != 'sti-bot' }}
