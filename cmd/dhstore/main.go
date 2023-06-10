@@ -50,18 +50,14 @@ func main() {
 			panic(err)
 		}
 
-		// Default options copied from cockroachdb with the addition of 1GiB cache.
+		// Default options copied from cockroachdb with the addition of 1GiB cache and removing custom compaction options.
 		// See:
 		// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
 		opts := &pebble.Options{
 			BytesPerSync:                10 << 20, // 10 MiB
 			WALBytesPerSync:             10 << 20, // 10 MiB
-			MaxConcurrentCompactions:    10,
 			MemTableSize:                64 << 20, // 64 MiB
 			MemTableStopWritesThreshold: 4,
-			LBaseMaxBytes:               64 << 20, // 64 MiB
-			L0CompactionThreshold:       2,
-			L0StopWritesThreshold:       1000,
 			DisableWAL:                  *dwal,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
 		}
