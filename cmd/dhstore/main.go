@@ -56,9 +56,12 @@ func main() {
 		opts := &pebble.Options{
 			BytesPerSync:                10 << 20, // 10 MiB
 			WALBytesPerSync:             10 << 20, // 10 MiB
+			MaxConcurrentCompactions:    10,
 			MemTableSize:                64 << 20, // 64 MiB
 			MemTableStopWritesThreshold: 4,
+			LBaseMaxBytes:               64 << 20, // 64 MiB
 			DisableWAL:                  *dwal,
+			L0CompactionThreshold:       2,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
 		}
 
