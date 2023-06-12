@@ -29,6 +29,8 @@ func main() {
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrcis HTTP server listen address.")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
+	maxConcurrentCompactions := flag.Int("maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
+	l0StopWritesThreshold := flag.Int("l0StopWritesThreshold", 12, "Hard limit on Pebble L0 read-amplification. Writes are stopped when this threshold is reached.")
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
@@ -50,18 +52,19 @@ func main() {
 			panic(err)
 		}
 
-		// Default options copied from cockroachdb with the addition of 1GiB cache and removing custom compaction options.
+		// Default options copied from cockroachdb with the addition of a custom sized block cache and configurable compaction options.
 		// See:
 		// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
 		opts := &pebble.Options{
 			BytesPerSync:                10 << 20, // 10 MiB
 			WALBytesPerSync:             10 << 20, // 10 MiB
-			MaxConcurrentCompactions:    10,
+			MaxConcurrentCompactions:    *maxConcurrentCompactions,
 			MemTableSize:                64 << 20, // 64 MiB
 			MemTableStopWritesThreshold: 4,
 			LBaseMaxBytes:               64 << 20, // 64 MiB
-			DisableWAL:                  *dwal,
 			L0CompactionThreshold:       2,
+			L0StopWritesThreshold:       *l0StopWritesThreshold,
+			DisableWAL:                  *dwal,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
 		}
 
