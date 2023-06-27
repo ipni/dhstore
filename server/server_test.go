@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewHttpServeMux(t *testing.T) {
+func TestNewServeMux(t *testing.T) {
 	tests := []struct {
 		name           string
 		onStore        func(*testing.T, dhstore.DHStore)
@@ -30,10 +30,10 @@ func TestNewHttpServeMux(t *testing.T) {
 		expectJSON     bool
 	}{
 		{
-			name:         "GET /multihash is 404",
+			name:         "GET /multihash is 405",
 			onMethod:     http.MethodGet,
 			onTarget:     "/multihash",
-			expectStatus: http.StatusNotFound,
+			expectStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:         "PUT /multihash with no body is 400",
@@ -86,10 +86,10 @@ func TestNewHttpServeMux(t *testing.T) {
 			expectStatus: http.StatusAccepted,
 		},
 		{
-			name:         "PUT /multihash/subtree is 404",
+			name:         "PUT /multihash/subtree is 405",
 			onMethod:     http.MethodPut,
 			onTarget:     "/multihash/fish",
-			expectStatus: http.StatusNotFound,
+			expectStatus: http.StatusMethodNotAllowed,
 		},
 		{
 			name:         "GET /multihash/subtree with bad length is 400",
@@ -232,7 +232,8 @@ func TestNewHttpServeMux(t *testing.T) {
 			m, err := metrics.New("0.0.0.0:40081", nil)
 			require.NoError(t, err)
 
-			subject := server.NewHttpServeMux(store, m)
+			s := server.New(store, m, "")
+			subject := s.Handler()
 
 			given := httptest.NewRequest(test.onMethod, test.onTarget, bytes.NewBufferString(test.onBody))
 			if test.onAcceptHeader != "" {

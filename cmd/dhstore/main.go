@@ -111,10 +111,7 @@ func main() {
 		panic(err)
 	}
 
-	svr, err := server.NewHttpServer(store, m, *listenAddr)
-	if err != nil {
-		panic(err)
-	}
+	svr := server.New(store, m, *listenAddr)
 
 	ctx := context.Background()
 	if err := svr.Start(ctx); err != nil {

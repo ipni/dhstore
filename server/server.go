@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"path"
@@ -49,35 +48,29 @@ func (rec *responseWriterWithStatus) WriteHeader(code int) {
 	rec.ResponseWriter.WriteHeader(code)
 }
 
-func NewHttpServer(dhs dhstore.DHStore, m *metrics.Metrics, addr string) (*Server, error) {
-	var dhss Server
-	dhss.s = &http.Server{
-		Addr:    addr,
-		Handler: dhss.serveMux(),
-	}
-
-	dhss.dhs = dhs
-	dhss.m = m
-	return &dhss, nil
-}
-
-func NewHttpServeMux(dhs dhstore.DHStore, m *metrics.Metrics) *http.ServeMux {
+func New(dhs dhstore.DHStore, m *metrics.Metrics, addr string) *Server {
+	mux := http.NewServeMux()
 	s := &Server{
 		dhs: dhs,
 		m:   m,
+		s: &http.Server{
+			Addr:    addr,
+			Handler: mux,
+		},
 	}
-	return s.serveMux()
-}
 
-func (s *Server) serveMux() *http.ServeMux {
-	mux := http.NewServeMux()
 	mux.HandleFunc("/multihash", s.handleMh)
 	mux.HandleFunc("/multihash/", s.handleMhSubtree)
 	mux.HandleFunc("/metadata", s.handleMetadata)
 	mux.HandleFunc("/metadata/", s.handleMetadataSubtree)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/", s.handleCatchAll)
-	return mux
+
+	return s
+}
+
+func (s *Server) Handler() http.Handler {
+	return s.s.Handler
 }
 
 func (s *Server) Start(_ context.Context) error {
@@ -95,16 +88,38 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.s.Shutdown(ctx)
 }
 
+func methodOK(w http.ResponseWriter, r *http.Request, method string) bool {
+	if r.Method != method {
+		http.Error(w, "", http.StatusMethodNotAllowed)
+		return false
+	}
+	return true
+}
+
+func methodsOK(w http.ResponseWriter, r *http.Request, methods ...string) bool {
+	for _, method := range methods {
+		if r.Method == method {
+			return true
+		}
+	}
+	for _, method := range methods {
+		w.Header().Add("Allow", method)
+	}
+	http.Error(w, "", http.StatusMethodNotAllowed)
+	return false
+}
+
 func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ws := newResponseWriterWithStatus(w)
 	defer s.reportLatency(start, ws.status, r.Method, "multihash")
+
 	switch r.Method {
 	case http.MethodPut:
 		s.handlePutMhs(ws, r)
 	default:
-		discardBody(r)
-		http.Error(w, "", http.StatusNotFound)
+		w.Header().Set("Allow", http.MethodPut)
+		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
 
@@ -112,34 +127,33 @@ func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ws := newResponseWriterWithStatus(w)
 	defer s.reportLatency(start, ws.status, r.Method, "multihash")
+
 	switch r.Method {
 	case http.MethodGet:
 		s.handleGetMh(newIPNILookupResponseWriter(ws, preferJSON), r)
 	default:
-		discardBody(r)
-		http.Error(w, "", http.StatusNotFound)
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
 
 func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 	var mir MergeIndexRequest
 	err := json.NewDecoder(r.Body).Decode(&mir)
-	discardBody(r)
 	if err != nil {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 	if len(mir.Merges) == 0 {
 		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
+		return
 	}
-	if err := s.dhs.MergeIndexes(mir.Merges); err != nil {
+	if err = s.dhs.MergeIndexes(mir.Merges); err != nil {
 		s.handleError(w, err)
 		return
 	}
-	logger.Infow("Finished putting multihashes", "count", len(mir.Merges))
-	if len(mir.Merges) != 0 {
-		logger.Infow("Multihash to try out", "mh", mir.Merges[0].Key.B58String())
-	}
+	logger.Infow("Finished putting multihashes", "count", len(mir.Merges), "sample", mir.Merges[0].Key.B58String())
+
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -192,30 +206,29 @@ func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ws := newResponseWriterWithStatus(w)
 	defer s.reportLatency(start, ws.status, r.Method, "metadata")
+
 	switch r.Method {
 	case http.MethodPut:
 		s.handlePutMetadata(ws, r)
 	default:
-		discardBody(r)
-		http.Error(w, "", http.StatusNotFound)
+		w.Header().Set("Allow", http.MethodPut)
+		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
 
 func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
 	var pmr PutMetadataRequest
 	err := json.NewDecoder(r.Body).Decode(&pmr)
-	discardBody(r)
 	if err != nil {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
-	if err := s.dhs.PutMetadata(pmr.Key, pmr.Value); err != nil {
+	if err = s.dhs.PutMetadata(pmr.Key, pmr.Value); err != nil {
 		s.handleError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-	logger.Infow("Finished putting metadata", "keyLen", len(pmr.Key), "valueLen", len(pmr.Value), "time", time.Since(start))
+	logger.Infow("Finished putting metadata", "keyLen", len(pmr.Key), "valueLen", len(pmr.Value))
 }
 
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
@@ -231,13 +244,13 @@ func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		s.handleDeleteMetadata(ws, r)
 	default:
-		discardBody(r)
-		http.Error(w, "", http.StatusNotFound)
+		w.Header().Add("Allow", http.MethodGet)
+		w.Header().Add("Allow", http.MethodDelete)
+		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
 
 func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	discardBody(r)
 	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
 	b, err := base58.Decode(sk)
 	if err != nil {
@@ -257,13 +270,12 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	gmr := GetMetadataResponse{
 		EncryptedMetadata: emd,
 	}
-	if err := json.NewEncoder(w).Encode(gmr); err != nil {
+	if err = json.NewEncoder(w).Encode(gmr); err != nil {
 		logger.Errorw("Failed to write get metadata response", "err", err, "key", sk)
 	}
 }
 
 func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
-	discardBody(r)
 	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
 	b, err := base58.Decode(sk)
 	if err != nil {
@@ -271,7 +283,7 @@ func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hvk := dhstore.HashedValueKey(b)
-	if err := s.dhs.DeleteMetadata(hvk); err != nil {
+	if err = s.dhs.DeleteMetadata(hvk); err != nil {
 		s.handleError(w, err)
 		return
 	}
@@ -281,25 +293,20 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ws := newResponseWriterWithStatus(w)
 	defer s.reportLatency(start, ws.status, r.Method, "ready")
-	discardBody(r)
+
 	switch r.Method {
 	case http.MethodGet:
 		ws.WriteHeader(http.StatusOK)
 	default:
-		http.Error(w, "", http.StatusNotFound)
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
 
 func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
-	discardBody(r)
 	http.Error(w, "", http.StatusNotFound)
 }
 
 func (s *Server) reportLatency(start time.Time, status int, method, path string) {
 	s.m.RecordHttpLatency(context.Background(), time.Since(start), method, path, status)
-}
-
-func discardBody(r *http.Request) {
-	_, _ = io.Copy(io.Discard, r.Body)
-	_ = r.Body.Close()
 }
