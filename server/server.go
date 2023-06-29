@@ -428,17 +428,14 @@ func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	ws := newResponseWriterWithStatus(w)
-	defer s.reportLatency(start, ws.status, r.Method, "ready")
-
-	switch r.Method {
-	case http.MethodGet:
-		ws.WriteHeader(http.StatusOK)
-	default:
+	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "", http.StatusMethodNotAllowed)
+		return
 	}
+
+	w.Header().Set("Cache-Control", "no-cache")
+	http.Error(w, dhstore.Version, http.StatusOK)
 }
 
 func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {

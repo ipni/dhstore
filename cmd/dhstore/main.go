@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,8 +38,14 @@ func main() {
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
 	fdbApiVersion := flag.Int("fdbApiVersion", 0, "Required. The FoundationDB API version as a numeric value")
 	fdbClusterFile := flag.String("fdbClusterFile", "", "Required. Path to ")
+	version := flag.Bool("version", false, "Show version information,")
 
 	flag.Parse()
+
+	if *version {
+		fmt.Println(dhstore.Version)
+		return
+	}
 
 	if _, set := os.LookupEnv("GOLOG_LOG_LEVEL"); !set {
 		_ = logging.SetLogLevel("*", *llvl)
