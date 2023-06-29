@@ -19,8 +19,6 @@ type ipniLookupResponseWriter struct {
 	jsonResponseWriter
 	result model.MultihashResult
 	count  int
-	// isMultihash is true if the request is for a multihash, false if it is for a CID
-	isMultihash bool
 }
 
 func NewIPNILookupResponseWriter(w http.ResponseWriter, mh multihash.Multihash, preferJson bool) LookupResponseWriter {

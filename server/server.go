@@ -111,27 +111,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return s.s.Shutdown(ctx)
 }
 
-func methodOK(w http.ResponseWriter, r *http.Request, method string) bool {
-	if r.Method != method {
-		http.Error(w, "", http.StatusMethodNotAllowed)
-		return false
-	}
-	return true
-}
-
-func methodsOK(w http.ResponseWriter, r *http.Request, methods ...string) bool {
-	for _, method := range methods {
-		if r.Method == method {
-			return true
-		}
-	}
-	for _, method := range methods {
-		w.Header().Add("Allow", method)
-	}
-	http.Error(w, "", http.StatusMethodNotAllowed)
-	return false
-}
-
 func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ws := newResponseWriterWithStatus(w)
