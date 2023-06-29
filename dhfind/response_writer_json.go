@@ -1,4 +1,4 @@
-package server
+package dhfind
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+
+	"github.com/ipni/dhstore"
 )
 
 const (
@@ -15,7 +17,7 @@ const (
 )
 
 var (
-	_ selectiveResponseWriter = (*jsonResponseWriter)(nil)
+	_ SelectiveResponseWriter = (*jsonResponseWriter)(nil)
 	_ http.ResponseWriter     = (*jsonResponseWriter)(nil)
 )
 
@@ -43,8 +45,7 @@ func (i *jsonResponseWriter) Accept(r *http.Request) error {
 		for _, amt := range amts {
 			mt, _, err := mime.ParseMediaType(amt)
 			if err != nil {
-				log.Debugw("Failed to check accepted response media type", "err", err)
-				return errHttpResponse{message: "invalid Accept header", status: http.StatusBadRequest}
+				return dhstore.ErrHttpResponse{Message: "invalid Accept header", Status: http.StatusBadRequest}
 			}
 			switch mt {
 			case mediaTypeNDJson:
@@ -66,10 +67,10 @@ func (i *jsonResponseWriter) Accept(r *http.Request) error {
 		// If there is no `Accept` header and JSON is preferred then be forgiving and fall back
 		// onto JSON media type. Otherwise, strictly require `Accept` header.
 		if !i.preferJson {
-			return errHttpResponse{message: "Accept header must be specified", status: http.StatusBadRequest}
+			return dhstore.ErrHttpResponse{Message: "Accept header must be specified", Status: http.StatusBadRequest}
 		}
 	case !okJson && !i.nd:
-		return errHttpResponse{message: fmt.Sprintf("media type not supported: %s", accepts), status: http.StatusBadRequest}
+		return dhstore.ErrHttpResponse{Message: fmt.Sprintf("media type not supported: %s", accepts), Status: http.StatusBadRequest}
 	}
 
 	i.f, _ = i.w.(http.Flusher)

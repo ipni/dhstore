@@ -2,6 +2,7 @@ package dhstore
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multicodec"
@@ -19,6 +20,10 @@ type (
 	ErrInvalidHashedValueKey struct {
 		Key HashedValueKey
 		Err error
+	}
+	ErrHttpResponse struct {
+		Message string
+		Status  int
 	}
 )
 
@@ -46,4 +51,12 @@ func (e ErrInvalidHashedValueKey) Error() string {
 
 func (e ErrInvalidHashedValueKey) Unwrap() error {
 	return e.Err
+}
+
+func (e ErrHttpResponse) Error() string {
+	return e.Message
+}
+
+func (e ErrHttpResponse) WriteTo(w http.ResponseWriter) {
+	http.Error(w, e.Message, e.Status)
 }

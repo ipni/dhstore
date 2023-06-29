@@ -2,9 +2,12 @@ package server_test
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 
@@ -12,7 +15,11 @@ import (
 	"github.com/ipni/dhstore/metrics"
 	"github.com/ipni/dhstore/pebble"
 	"github.com/ipni/dhstore/server"
+	"github.com/ipni/go-libipni/dhash"
+	"github.com/ipni/go-libipni/find/model"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/mr-tron/base58"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
@@ -28,6 +35,7 @@ func TestNewServeMux(t *testing.T) {
 		expectStatus   int
 		expectBody     string
 		expectJSON     bool
+		dhfind         bool
 	}{
 		{
 			name:         "GET /multihash is 405",
@@ -117,7 +125,14 @@ func TestNewServeMux(t *testing.T) {
 			onMethod:     http.MethodGet,
 			onTarget:     "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
 			expectStatus: http.StatusBadRequest,
-			expectBody:   "multihash must be of code dbl-sha2-256, got: sha2-256",
+			expectBody:   "multihash must be of code dbl-sha2-256 when dhfind not enabled",
+		},
+		{
+			name:         "GET /multihash/subtree with valid non-dbl-sha2-256 multihash and dhfind is 404",
+			onMethod:     http.MethodGet,
+			onTarget:     "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
+			expectStatus: http.StatusNotFound,
+			dhfind:       true,
 		},
 		{
 			name:         "GET /multihash/subtree with valid absent dbl-sha2-256 multihash is 404",
@@ -168,7 +183,15 @@ func TestNewServeMux(t *testing.T) {
 			onMethod:       http.MethodGet,
 			onTarget:       "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
 			expectStatus:   http.StatusBadRequest,
-			expectBody:     "multihash must be of code dbl-sha2-256, got: sha2-256",
+			expectBody:     "multihash must be of code dbl-sha2-256 when dhfind not enabled",
+		},
+		{
+			name:           "streaming GET /multihash/subtree with valid non-dbl-sha2-256 multihash and dhfind is 404",
+			onAcceptHeader: "application/x-ndjson",
+			onMethod:       http.MethodGet,
+			onTarget:       "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
+			expectStatus:   http.StatusNotFound,
+			dhfind:         true,
 		},
 		{
 			name:           "streaming GET /multihash/subtree with valid absent dbl-sha2-256 multihash is 404",
@@ -221,6 +244,9 @@ func TestNewServeMux(t *testing.T) {
 			expectJSON:   true,
 		},
 	}
+
+	provServ := httptest.NewServer(http.HandlerFunc(providersHandler))
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			store, err := pebble.NewPebbleDHStore(t.TempDir(), nil)
@@ -232,7 +258,13 @@ func TestNewServeMux(t *testing.T) {
 			m, err := metrics.New("0.0.0.0:40081", nil)
 			require.NoError(t, err)
 
-			s := server.New(store, m, "")
+			var s *server.Server
+			if test.dhfind {
+				s, err = server.New(store, "", server.WithMetrics(m), server.WithDHFind(provServ.URL))
+			} else {
+				s, err = server.New(store, "", server.WithMetrics(m))
+			}
+			require.NoError(t, err)
 			subject := s.Handler()
 
 			given := httptest.NewRequest(test.onMethod, test.onTarget, bytes.NewBufferString(test.onBody))
@@ -251,5 +283,123 @@ func TestNewServeMux(t *testing.T) {
 				require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
 			}
 		})
+	}
+}
+
+func TestDHFind(t *testing.T) {
+	provServ := httptest.NewServer(http.HandlerFunc(providersHandler))
+
+	store, err := pebble.NewPebbleDHStore(t.TempDir(), nil)
+	require.NoError(t, err)
+	defer store.Close()
+
+	origMh, err := multihash.FromB58String("QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH")
+	require.NoError(t, err)
+
+	const providerID = "12D3KooWKRyzVWW6ChFjQjK4miCty85Niy48tpPV95XdKu1BcvMA"
+	pid, err := peer.Decode(providerID)
+	require.NoError(t, err)
+	ctxID := []byte("fish")
+	metadata := []byte("lobster")
+
+	loadStore(t, origMh, ctxID, metadata, pid, store)
+
+	s, err := server.New(store, "", server.WithDHFind(provServ.URL))
+	require.NoError(t, err)
+	subject := s.Handler()
+
+	given := httptest.NewRequest(http.MethodGet, "/multihash/"+origMh.B58String(), nil)
+	got := httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusOK, got.Code)
+	gotBody, err := io.ReadAll(got.Body)
+	require.NoError(t, err)
+
+	t.Log("Got find response:", string(gotBody))
+	findRsp, err := model.UnmarshalFindResponse(gotBody)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(findRsp.MultihashResults))
+	mhr := findRsp.MultihashResults[0]
+	require.Equal(t, origMh, mhr.Multihash)
+	require.Equal(t, 1, len(mhr.ProviderResults))
+	pr := mhr.ProviderResults[0]
+	require.Equal(t, ctxID, pr.ContextID)
+	require.Equal(t, metadata, pr.Metadata)
+	require.Equal(t, pid, pr.Provider.ID)
+
+	given = httptest.NewRequest(http.MethodGet, "/multihash/"+origMh.B58String(), nil)
+	given.Header.Set("Accept", "application/x-ndjson")
+	got = httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusOK, got.Code)
+	gotBody, err = io.ReadAll(got.Body)
+	require.NoError(t, err)
+
+	t.Log("Got provider result:", string(gotBody))
+	err = json.Unmarshal(gotBody, &pr)
+	require.NoError(t, err)
+	require.Equal(t, ctxID, pr.ContextID)
+	require.Equal(t, metadata, pr.Metadata)
+	require.Equal(t, pid, pr.Provider.ID)
+}
+
+func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte, providerID peer.ID, store *pebble.PebbleDHStore) multihash.Multihash {
+	vk := dhash.CreateValueKey(providerID, ctxID)
+
+	encMeta, err := dhash.EncryptMetadata(metadata, vk)
+	require.NoError(t, err)
+
+	err = store.PutMetadata(vk, encMeta)
+	require.NoError(t, err)
+
+	// Encrypt value key with original multihash.
+	encValueKey, err := dhash.EncryptValueKey(vk, origMh)
+	require.NoError(t, err)
+
+	mh, err := dhash.SecondMultihash(origMh)
+	require.NoError(t, err)
+
+	err = store.MergeIndexes([]dhstore.Index{
+		{Key: mh, Value: []byte(encValueKey)},
+	})
+	require.NoError(t, err)
+
+	return mh
+}
+
+func providersHandler(w http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+
+	providerID, err := peer.Decode(path.Base(req.URL.Path))
+	if err != nil {
+		fmt.Println("Cannot get provider ID:", err)
+	}
+
+	maddr, _ := multiaddr.NewMultiaddr("/ip4/127.0.0.1/tcp/9876")
+
+	ai := peer.AddrInfo{
+		ID:    providerID,
+		Addrs: []multiaddr.Multiaddr{maddr},
+	}
+
+	pinfo := model.ProviderInfo{
+		AddrInfo:   ai,
+		Publisher:  &ai,
+		IndexCount: 1,
+	}
+
+	data, err := json.Marshal(pinfo)
+	if err != nil {
+		panic(err.Error())
+	}
+	writeJsonResponse(w, http.StatusOK, data)
+}
+
+func writeJsonResponse(w http.ResponseWriter, status int, body []byte) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if _, err := w.Write(body); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
 	}
 }

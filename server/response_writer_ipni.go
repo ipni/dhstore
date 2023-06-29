@@ -49,11 +49,11 @@ func (i *ipniLookupResponseWriter) WriteEncryptedValueKey(evk dhstore.EncryptedV
 		if err := i.encoder.Encode(EncryptedValueKeyResult{
 			EncryptedValueKey: evk,
 		}); err != nil {
-			logger.Errorw("Failed to encode ndjson response", "err", err)
+			log.Errorw("Failed to encode ndjson response", "err", err)
 			return err
 		}
 		if _, err := i.w.Write(newline); err != nil {
-			logger.Errorw("Failed to encode ndjson response", "err", err)
+			log.Errorw("Failed to encode ndjson response", "err", err)
 			return err
 		}
 		if i.f != nil {
@@ -70,7 +70,7 @@ func (i *ipniLookupResponseWriter) Close() error {
 	if i.count == 0 {
 		return errHttpResponse{status: http.StatusNotFound}
 	}
-	logger.Debugw("Finished writing ipni results", "count", i.count)
+	log.Debugw("Finished writing ipni results", "count", i.count)
 	if i.nd {
 		return nil
 	}

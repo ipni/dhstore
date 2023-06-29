@@ -28,6 +28,7 @@ func main() {
 	storePath := flag.String("storePath", "./dhstore/store", "The path at which the dhstore data persisted.")
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrcis HTTP server listen address.")
+	provURL := flag.String("providersURL", "", "Providers URL to enable dhfind.")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
 	maxConcurrentCompactions := flag.Int("maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
 	l0StopWritesThreshold := flag.Int("l0StopWritesThreshold", 12, "Hard limit on Pebble L0 read-amplification. Writes are stopped when this threshold is reached.")
@@ -111,7 +112,10 @@ func main() {
 		panic(err)
 	}
 
-	svr := server.New(store, m, *listenAddr)
+	svr, err := server.New(store, *listenAddr, server.WithMetrics(m), server.WithDHFind(*provURL))
+	if err != nil {
+		panic(err)
+	}
 
 	ctx := context.Background()
 	if err := svr.Start(ctx); err != nil {

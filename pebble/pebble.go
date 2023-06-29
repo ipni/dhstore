@@ -84,7 +84,6 @@ func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
 }
 
 func (s *PebbleDHStore) PutMetadata(hvk dhstore.HashedValueKey, em dhstore.EncryptedMetadata) error {
-
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
 	hvkk, err := keygen.hashedValueKeyKey(hvk)
