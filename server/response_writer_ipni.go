@@ -28,11 +28,11 @@ func newIPNILookupResponseWriter(w http.ResponseWriter, preferJson bool) lookupR
 }
 
 func (i *ipniLookupResponseWriter) Accept(r *http.Request) error {
-	if err := i.jsonResponseWriter.Accept(r); err != nil {
+	err := i.jsonResponseWriter.Accept(r)
+	if err != nil {
 		return err
 	}
 	smh := strings.TrimPrefix(path.Base(r.URL.Path), "multihash/")
-	var err error
 	i.result.Multihash, err = multihash.FromB58String(smh)
 	if err != nil {
 		return errHttpResponse{message: err.Error(), status: http.StatusBadRequest}
@@ -46,13 +46,14 @@ func (i *ipniLookupResponseWriter) Key() multihash.Multihash {
 
 func (i *ipniLookupResponseWriter) WriteEncryptedValueKey(evk dhstore.EncryptedValueKey) error {
 	if i.nd {
-		if err := i.encoder.Encode(EncryptedValueKeyResult{
+		err := i.encoder.Encode(EncryptedValueKeyResult{
 			EncryptedValueKey: evk,
-		}); err != nil {
+		})
+		if err != nil {
 			log.Errorw("Failed to encode ndjson response", "err", err)
 			return err
 		}
-		if _, err := i.w.Write(newline); err != nil {
+		if _, err = i.w.Write(newline); err != nil {
 			log.Errorw("Failed to encode ndjson response", "err", err)
 			return err
 		}

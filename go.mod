@@ -7,8 +7,12 @@ require (
 	// See: https://github.com/apple/foundationdb/tree/7.1.33/bindings/go
 	github.com/apple/foundationdb/bindings/go v0.0.0-20230508183941-1098aa0251f4
 	github.com/cockroachdb/pebble v0.0.0-20220726144858-a78491c0086f
+	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-log/v2 v2.5.1
+	github.com/ipni/go-libipni v0.2.7
+	github.com/libp2p/go-libp2p v0.28.1
 	github.com/mr-tron/base58 v1.2.0
+	github.com/multiformats/go-multiaddr v0.9.0
 	github.com/multiformats/go-multicodec v0.9.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/multiformats/go-varint v0.0.7
@@ -19,13 +23,6 @@ require (
 	go.opentelemetry.io/otel/metric v0.33.0
 	go.opentelemetry.io/otel/sdk/metric v0.33.0
 	lukechampine.com/blake3 v1.2.1
-)
-
-require (
-	github.com/ipfs/go-cid v0.4.1
-	github.com/ipni/go-libipni v0.2.7-0.20230629033642-94cf12e4685c
-	github.com/libp2p/go-libp2p v0.28.1
-	github.com/multiformats/go-multiaddr v0.9.0
 )
 
 require (

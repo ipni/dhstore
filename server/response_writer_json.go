@@ -63,8 +63,9 @@ func (i *jsonResponseWriter) Accept(r *http.Request) error {
 
 	switch {
 	case len(accepts) == 0:
-		// If there is no `Accept` header and JSON is preferred then be forgiving and fall back
-		// onto JSON media type. Otherwise, strictly require `Accept` header.
+		// If there is no `Accept` header and JSON is preferred then be
+		// forgiving and fall back onto JSON media type. Otherwise, strictly
+		// require `Accept` header.
 		if !i.preferJson {
 			return errHttpResponse{message: "Accept header must be specified", status: http.StatusBadRequest}
 		}

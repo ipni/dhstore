@@ -35,8 +35,8 @@ type Server struct {
 	dhfind *client.DHashClient
 }
 
-// responseWriterWithStatus is required to capture status code from ResponseWriter so that it can be reported
-// to metrics in a unified way
+// responseWriterWithStatus is required to capture status code from
+// ResponseWriter so that it can be reported to metrics in a unified way.
 type responseWriterWithStatus struct {
 	http.ResponseWriter
 	status int
@@ -45,7 +45,8 @@ type responseWriterWithStatus struct {
 func newResponseWriterWithStatus(w http.ResponseWriter) *responseWriterWithStatus {
 	return &responseWriterWithStatus{
 		ResponseWriter: w,
-		// 200 status should be assumed by default if WriteHeader hasn't been called explicitly https://pkg.go.dev/net/http#ResponseWriter
+		// 200 status should be assumed by default if WriteHeader hasn't been
+		// called explicitly.
 		status: 200,
 	}
 }
@@ -72,14 +73,13 @@ func New(dhs dhstore.DHStore, addr string, options ...Option) (*Server, error) {
 		},
 	}
 
+	mux.HandleFunc("/cid/", s.handleCidSubtree)
 	mux.HandleFunc("/multihash", s.handleMh)
 	mux.HandleFunc("/multihash/", s.handleMhSubtree)
 	mux.HandleFunc("/metadata", s.handleMetadata)
 	mux.HandleFunc("/metadata/", s.handleMetadataSubtree)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/", s.handleCatchAll)
-
-	mux.HandleFunc("/cid/", s.handleCidSubtree)
 
 	if opts.providersURL != "" {
 		s.dhfind, err = client.NewDHashClient(opts.providersURL, client.WithDHStoreAPI(s))
@@ -199,8 +199,8 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 
 	// launch the find in a separate go routine
 	go func() {
-		// FindAsync returns results on resChan until there are no more results or error.
-		// When finished, returns the error or nil.
+		// FindAsync returns results on resChan until there are no more results
+		// or error. When finished, returns the error or nil.
 		errChan <- s.dhfind.FindAsync(r.Context(), mh, resChan)
 	}()
 
@@ -225,7 +225,8 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 		return
 	}
 
-	// If there were no results - return 404, otherwise finalize the response and return 200
+	// If there were no results - return 404, otherwise finalize the response
+	// and return 200.
 	if !haveResults {
 		http.Error(w, "", http.StatusNotFound)
 		return
@@ -316,7 +317,7 @@ func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := w.Close(); err != nil {
+	if err = w.Close(); err != nil {
 		switch e := err.(type) {
 		case errHttpResponse:
 			e.WriteTo(w)
