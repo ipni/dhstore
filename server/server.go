@@ -140,7 +140,19 @@ func (s *Server) handleCidSubtree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.dhfindMh(w, r, multihash.Multihash(c.Hash()))
+	b := c.Hash()
+	dm, err := multihash.Decode(b)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	mh := multihash.Multihash(b)
+
+	if dm.Code == multihash.DBL_SHA2_256 {
+		s.lookupMh(w, r, mh)
+	} else {
+		s.dhfindMh(w, r, mh)
+	}
 }
 
 func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
