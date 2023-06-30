@@ -260,10 +260,11 @@ func (s *Server) FindMultihash(ctx context.Context, dhmh multihash.Multihash) ([
 	return []model.EncryptedMultihashResult{result}, nil
 }
 
-// FindMetadata implements the client.DHSToreAPI interface, to lookup value
-// encrypted metadata with key
-func (s *Server) FindMetadata(ctx context.Context, vk []byte) ([]byte, error) {
-	return s.dhs.GetMetadata(dhstore.HashedValueKey(vk))
+// FindMetadata implements the client.DHSToreAPI interface, to lookup encrypted
+// metadata using a hash of the value key.
+func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
+	encMeta, err := s.dhs.GetMetadata(dhstore.HashedValueKey(hvk))
+	return encMeta, err
 }
 
 func (s *Server) lookupMh(w http.ResponseWriter, r *http.Request, mh multihash.Multihash) {
@@ -271,27 +272,7 @@ func (s *Server) lookupMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 	ws := newResponseWriterWithStatus(w)
 	defer s.reportLatency(start, ws.status, r.Method, "multihash")
 
-	s.handleGetMh(newIPNILookupResponseWriter(ws, s.preferJSON), r)
-}
-
-func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
-	var mir MergeIndexRequest
-	err := json.NewDecoder(r.Body).Decode(&mir)
-	if err != nil {
-		http.Error(w, "", http.StatusBadRequest)
-		return
-	}
-	if len(mir.Merges) == 0 {
-		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
-		return
-	}
-	if err = s.dhs.MergeIndexes(mir.Merges); err != nil {
-		s.handleError(w, err)
-		return
-	}
-	log.Infow("Finished putting multihashes", "count", len(mir.Merges), "sample", mir.Merges[0].Key.B58String())
-
-	w.WriteHeader(http.StatusAccepted)
+	s.handleGetMh(newIPNILookupResponseWriter(ws, mh, s.preferJSON), r)
 }
 
 func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
@@ -326,6 +307,26 @@ func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
 			http.Error(w, "", http.StatusInternalServerError)
 		}
 	}
+}
+
+func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
+	var mir MergeIndexRequest
+	err := json.NewDecoder(r.Body).Decode(&mir)
+	if err != nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	if len(mir.Merges) == 0 {
+		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
+		return
+	}
+	if err = s.dhs.MergeIndexes(mir.Merges); err != nil {
+		s.handleError(w, err)
+		return
+	}
+	log.Infow("Finished putting multihashes", "count", len(mir.Merges), "sample", mir.Merges[0].Key.B58String())
+
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *Server) handleError(w http.ResponseWriter, err error) {
@@ -391,12 +392,12 @@ func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
-	b, err := base58.Decode(sk)
+	hvk, err := base58.Decode(sk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
 		return
 	}
-	emd, err := s.FindMetadata(r.Context(), b)
+	emd, err := s.FindMetadata(r.Context(), hvk)
 	if err != nil {
 		s.handleError(w, err)
 		return
