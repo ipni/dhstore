@@ -350,7 +350,7 @@ func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte,
 	encMeta, err := dhash.EncryptMetadata(metadata, vk)
 	require.NoError(t, err)
 
-	err = store.PutMetadata(vk, encMeta)
+	err = store.PutMetadata(dhash.SHA256(vk, nil), encMeta)
 	require.NoError(t, err)
 
 	// Encrypt value key with original multihash.
