@@ -22,6 +22,8 @@ Usage of dhstore
         The dhstore HTTP server listen address. (default "0.0.0.0:40080")
   -logLevel string
         The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset. (default "info")
+  -providersURL
+        Providers URL to enable dhfind.
   -storePath string
         The path at which the dhstore data persisted. (default "./dhstore/store")
 ```
