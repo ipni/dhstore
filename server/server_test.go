@@ -348,6 +348,7 @@ func TestDHFind(t *testing.T) {
 	subject.ServeHTTP(got, given)
 	require.Equal(t, http.StatusOK, got.Code)
 	gotBody, err = io.ReadAll(got.Body)
+	require.NoError(t, err)
 	findRsp, err = model.UnmarshalFindResponse(gotBody)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(findRsp.MultihashResults))
