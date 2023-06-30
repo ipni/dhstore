@@ -11,7 +11,7 @@ import (
 type (
 	selectiveResponseWriter interface {
 		http.ResponseWriter
-		Accept(r *http.Request) error
+		Accept(*http.Request) error
 	}
 	lookupResponseWriter interface {
 		io.Closer

@@ -2,8 +2,6 @@ package server
 
 import (
 	"net/http"
-	"path"
-	"strings"
 
 	"github.com/ipni/dhstore"
 	"github.com/multiformats/go-multihash"
@@ -21,23 +19,17 @@ type ipniLookupResponseWriter struct {
 	count  int
 }
 
-func newIPNILookupResponseWriter(w http.ResponseWriter, preferJson bool) lookupResponseWriter {
+func newIPNILookupResponseWriter(w http.ResponseWriter, mh multihash.Multihash, preferJson bool) lookupResponseWriter {
 	return &ipniLookupResponseWriter{
 		jsonResponseWriter: newJsonResponseWriter(w, preferJson),
+		result: EncryptedMultihashResult{
+			Multihash: mh,
+		},
 	}
 }
 
 func (i *ipniLookupResponseWriter) Accept(r *http.Request) error {
-	err := i.jsonResponseWriter.Accept(r)
-	if err != nil {
-		return err
-	}
-	smh := strings.TrimPrefix(path.Base(r.URL.Path), "multihash/")
-	i.result.Multihash, err = multihash.FromB58String(smh)
-	if err != nil {
-		return errHttpResponse{message: err.Error(), status: http.StatusBadRequest}
-	}
-	return nil
+	return i.jsonResponseWriter.Accept(r)
 }
 
 func (i *ipniLookupResponseWriter) Key() multihash.Multihash {
