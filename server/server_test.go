@@ -342,6 +342,16 @@ func TestDHFind(t *testing.T) {
 	require.Equal(t, ctxID, pr.ContextID)
 	require.Equal(t, metadata, pr.Metadata)
 	require.Equal(t, pid, pr.Provider.ID)
+
+	given = httptest.NewRequest(http.MethodGet, "/cid/bafybeigvgzoolc3drupxhlevdp2ugqcrbcsqfmcek2zxiw5wctk3xjpjwy", nil)
+	got = httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusOK, got.Code)
+	gotBody, err = io.ReadAll(got.Body)
+	require.NoError(t, err)
+	findRsp, err = model.UnmarshalFindResponse(gotBody)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(findRsp.MultihashResults))
 }
 
 func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte, providerID peer.ID, store *pebble.PebbleDHStore) multihash.Multihash {
