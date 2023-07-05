@@ -25,6 +25,7 @@ var (
 
 type Metrics struct {
 	exporter      *prometheus.Exporter
+	dhfindLatency syncint64.Histogram
 	httpLatency   syncint64.Histogram
 	s             *http.Server
 	pebbleMetrics *pebbleMetrics
@@ -58,6 +59,12 @@ func New(metricsAddr string, pebbleMetricsProvider func() *pebble.Metrics) (*Met
 		return nil, err
 	}
 
+	if m.dhfindLatency, err = meter.SyncInt64().Histogram("ipni/dhstore/dhfind_latency",
+		instrument.WithUnit(unit.Milliseconds),
+		instrument.WithDescription("Latency of DHFind HTTP API")); err != nil {
+		return nil, err
+	}
+
 	m.s = &http.Server{
 		Addr:    metricsAddr,
 		Handler: metricsMux(),
@@ -75,6 +82,11 @@ func New(metricsAddr string, pebbleMetricsProvider func() *pebble.Metrics) (*Met
 
 func (m *Metrics) RecordHttpLatency(ctx context.Context, t time.Duration, method, path string, status int) {
 	m.httpLatency.Record(ctx, t.Milliseconds(),
+		attribute.String("method", method), attribute.String("path", path), attribute.Int("status", status))
+}
+
+func (m *Metrics) RecordDHFindLatency(ctx context.Context, t time.Duration, method, path string, status int) {
+	m.dhfindLatency.Record(ctx, t.Milliseconds(),
 		attribute.String("method", method), attribute.String("path", path), attribute.Int("status", status))
 }
 

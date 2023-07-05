@@ -112,13 +112,18 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	ws := newResponseWriterWithStatus(w)
-	defer s.reportLatency(start, ws.status, r.Method, "multihash")
+	if s.metrics != nil {
+		ws := newResponseWriterWithStatus(w)
+		w = ws
+		start := time.Now()
+		defer func() {
+			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "multihash", ws.status)
+		}()
+	}
 
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMhs(ws, r)
+		s.handlePutMhs(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodPut)
 		http.Error(w, "", http.StatusMethodNotAllowed)
@@ -151,7 +156,7 @@ func (s *Server) handleCidSubtree(w http.ResponseWriter, r *http.Request) {
 	if dm.Code == multihash.DBL_SHA2_256 {
 		s.lookupMh(w, r, mh)
 	} else {
-		s.dhfindMh(w, r, mh)
+		s.dhfindMh(w, r, mh, "cid")
 	}
 }
 
@@ -181,14 +186,23 @@ func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
 	if dm.Code == multihash.DBL_SHA2_256 {
 		s.lookupMh(w, r, mh)
 	} else {
-		s.dhfindMh(w, r, mh)
+		s.dhfindMh(w, r, mh, "multihash")
 	}
 }
 
-func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.Multihash) {
+func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.Multihash, httpPath string) {
 	if s.dhfind == nil {
 		http.Error(w, "multihash must be of code dbl-sha2-256 when dhfind not enabled", http.StatusBadRequest)
 		return
+	}
+
+	if s.metrics != nil {
+		ws := newResponseWriterWithStatus(w)
+		w = ws
+		start := time.Now()
+		defer func() {
+			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, httpPath, ws.status)
+		}()
 	}
 
 	rspw := dhfind.NewIPNILookupResponseWriter(w, mh, s.preferJSON)
@@ -280,11 +294,16 @@ func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
 }
 
 func (s *Server) lookupMh(w http.ResponseWriter, r *http.Request, mh multihash.Multihash) {
-	start := time.Now()
-	ws := newResponseWriterWithStatus(w)
-	defer s.reportLatency(start, ws.status, r.Method, "multihash")
+	if s.metrics != nil {
+		ws := newResponseWriterWithStatus(w)
+		w = ws
+		start := time.Now()
+		defer func() {
+			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "multihash", ws.status)
+		}()
+	}
 
-	s.handleGetMh(newIPNILookupResponseWriter(ws, mh, s.preferJSON), r)
+	s.handleGetMh(newIPNILookupResponseWriter(w, mh, s.preferJSON), r)
 }
 
 func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
@@ -353,13 +372,18 @@ func (s *Server) handleError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) handleMetadata(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	ws := newResponseWriterWithStatus(w)
-	defer s.reportLatency(start, ws.status, r.Method, "metadata")
+	if s.metrics != nil {
+		ws := newResponseWriterWithStatus(w)
+		w = ws
+		start := time.Now()
+		defer func() {
+			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "metadata", ws.status)
+		}()
+	}
 
 	switch r.Method {
 	case http.MethodPut:
-		s.handlePutMetadata(ws, r)
+		s.handlePutMetadata(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodPut)
 		http.Error(w, "", http.StatusMethodNotAllowed)
@@ -382,8 +406,9 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
-	ws := newResponseWriterWithStatus(w)
 	if s.metrics != nil {
+		ws := newResponseWriterWithStatus(w)
+		w = ws
 		start := time.Now()
 		defer func() {
 			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "metadata", ws.status)
@@ -392,9 +417,9 @@ func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		s.handleGetMetadata(ws, r)
+		s.handleGetMetadata(w, r)
 	case http.MethodDelete:
-		s.handleDeleteMetadata(ws, r)
+		s.handleDeleteMetadata(w, r)
 	default:
 		w.Header().Add("Allow", http.MethodGet)
 		w.Header().Add("Allow", http.MethodDelete)
@@ -453,10 +478,4 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCatchAll(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "", http.StatusNotFound)
-}
-
-func (s *Server) reportLatency(start time.Time, status int, method, path string) {
-	if s.metrics != nil {
-		s.metrics.RecordHttpLatency(context.Background(), time.Since(start), method, path, status)
-	}
 }
