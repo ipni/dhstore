@@ -196,12 +196,13 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 		return
 	}
 
+	var start time.Time
 	if s.metrics != nil {
 		ws := newResponseWriterWithStatus(w)
 		w = ws
-		start := time.Now()
+		start = time.Now()
 		defer func() {
-			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, httpPath, ws.status)
+			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, httpPath, ws.status, false)
 		}()
 	}
 
@@ -233,7 +234,12 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 	var haveResults bool
 
 	for pr := range resChan {
-		haveResults = true
+		if !haveResults {
+			haveResults = true
+			if s.metrics != nil {
+				s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, httpPath, http.StatusOK, true)
+			}
+		}
 		if err = rspw.WriteProviderResult(pr); err != nil {
 			log.Errorw("Failed to encode provider result", "err", err)
 			// This error is due to the client disconnecting. Continue reading

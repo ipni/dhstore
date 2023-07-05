@@ -85,9 +85,9 @@ func (m *Metrics) RecordHttpLatency(ctx context.Context, t time.Duration, method
 		attribute.String("method", method), attribute.String("path", path), attribute.Int("status", status))
 }
 
-func (m *Metrics) RecordDHFindLatency(ctx context.Context, t time.Duration, method, path string, status int) {
+func (m *Metrics) RecordDHFindLatency(ctx context.Context, t time.Duration, method, path string, status int, firstResult bool) {
 	m.dhfindLatency.Record(ctx, t.Milliseconds(),
-		attribute.String("method", method), attribute.String("path", path), attribute.Int("status", status))
+		attribute.String("method", method), attribute.String("path", path), attribute.Int("status", status), attribute.Bool("ttfr", firstResult))
 }
 
 func (m *Metrics) Start(_ context.Context) error {
