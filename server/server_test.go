@@ -394,14 +394,22 @@ func providersHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	pinfo := model.ProviderInfo{
-		AddrInfo:   ai,
-		Publisher:  &ai,
-		IndexCount: 1,
+		AddrInfo:  ai,
+		Publisher: &ai,
 	}
-
 	data, err := json.Marshal(pinfo)
 	if err != nil {
 		panic(err.Error())
+	}
+
+	if req.URL.Path == "/providers" {
+		var buf bytes.Buffer
+		buf.Grow(len(data) + 2)
+		buf.Write([]byte("["))
+		buf.Write(data)
+		buf.Write([]byte("]"))
+		writeJsonResponse(w, http.StatusOK, buf.Bytes())
+		return
 	}
 	writeJsonResponse(w, http.StatusOK, data)
 }
