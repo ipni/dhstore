@@ -124,8 +124,8 @@ github.com/ipfs/go-cid v0.4.1/go.mod h1:uQHwDeX4c6CtyrFwdqyhpNcxVewur1M7l7fNU7LK
 github.com/ipfs/go-log/v2 v2.5.1 h1:1XdUzF7048prq4aBjDQQ4SL5RxftpRGdXhNRwKSAlcY=
 github.com/ipfs/go-log/v2 v2.5.1/go.mod h1:prSpmC1Gpllc9UYWxDiZDreBYw7zp4Iqp1kOLU9U5UI=
 github.com/ipld/go-ipld-prime v0.20.0 h1:Ud3VwE9ClxpO2LkCYP7vWPc0Fo+dYdYzgxUJZ3uRG4g=
-github.com/ipni/go-libipni v0.2.8 h1:PNiMpE/b9QgDOIbrRsv1c5Y5kVvwFClUz6VwEx5P+Hk=
-github.com/ipni/go-libipni v0.2.8/go.mod h1:dhBH9HwxT6HzQPRZ8ikWv+ccqF8ucMIoGiiTSrHA4tw=
+github.com/ipni/go-libipni v0.2.9-0.20230709235403-38cb758aabf0 h1:XLk471/OanJiXv5Jm/EwMhFxB5csJdPllfWpFXRhMxU=
+github.com/ipni/go-libipni v0.2.9-0.20230709235403-38cb758aabf0/go.mod h1:dhBH9HwxT6HzQPRZ8ikWv+ccqF8ucMIoGiiTSrHA4tw=
 github.com/iris-contrib/blackfriday v2.0.0+incompatible/go.mod h1:UzZ2bDEoaSGPbkg6SAB4att1aAwTmVIx/5gCVqeyUdI=
 github.com/iris-contrib/go.uuid v2.0.0+incompatible/go.mod h1:iz2lgM/1UnEf1kP0L/+fafWORmlnuysV2EMP8MW+qe0=
 github.com/iris-contrib/i18n v0.0.0-20171121225848-987a633949d0/go.mod h1:pMCz62A0xJL6I+umB2YTlFRwWXaDFA0jy+5HzGiJjqI=

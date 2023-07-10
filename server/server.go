@@ -81,12 +81,12 @@ func New(dhs dhstore.DHStore, addr string, options ...Option) (*Server, error) {
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("/", s.handleCatchAll)
 
-	if opts.providersURL != "" {
-		s.dhfind, err = client.NewDHashClient(opts.providersURL, client.WithDHStoreAPI(s))
+	if len(opts.providersURLs) != 0 {
+		s.dhfind, err = client.NewDHashClient(client.WithProvidersURL(opts.providersURLs...), client.WithDHStoreAPI(s))
 		if err != nil {
 			return nil, err
 		}
-		log.Infow("dhfind enabled", "providersURL", opts.providersURL)
+		log.Infow("dhfind enabled", "providersURLs", opts.providersURLs)
 	}
 
 	return s, nil
