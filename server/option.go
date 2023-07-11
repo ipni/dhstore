@@ -8,9 +8,9 @@ import (
 
 // config contains all options for the server.
 type config struct {
-	metrics      *metrics.Metrics
-	providersURL string
-	preferJSON   bool
+	metrics       *metrics.Metrics
+	providersURLs []string
+	preferJSON    bool
 }
 
 // Option is a function that sets a value in a config.
@@ -38,9 +38,9 @@ func WithMetrics(m *metrics.Metrics) Option {
 }
 
 // WithDHFind enables dhfind functionality.
-func WithDHFind(providersURL string) Option {
+func WithDHFind(providersURLs ...string) Option {
 	return func(c *config) error {
-		c.providersURL = providersURL
+		c.providersURLs = append(c.providersURLs, providersURLs...)
 		return nil
 	}
 }

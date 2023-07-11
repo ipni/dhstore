@@ -25,11 +25,23 @@ var (
 	log = logging.Logger("cmd/dhstore")
 )
 
+type arrayFlags []string
+
+func (a *arrayFlags) String() string {
+	return strings.Join(*a, ", ")
+}
+
+func (a *arrayFlags) Set(value string) error {
+	*a = append(*a, value)
+	return nil
+}
+
 func main() {
+	var providerURLs arrayFlags
 	storePath := flag.String("storePath", "./dhstore/store", "The path at which the dhstore data persisted.")
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrcis HTTP server listen address.")
-	provURL := flag.String("providersURL", "", "Providers URL to enable dhfind.")
+	flag.Var(&providerURLs, "providerURL", "Providers URL to enable dhfind. Multiple OK")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
 	maxConcurrentCompactions := flag.Int("maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
 	l0StopWritesThreshold := flag.Int("l0StopWritesThreshold", 12, "Hard limit on Pebble L0 read-amplification. Writes are stopped when this threshold is reached.")
@@ -119,7 +131,7 @@ func main() {
 		panic(err)
 	}
 
-	svr, err := server.New(store, *listenAddr, server.WithMetrics(m), server.WithDHFind(*provURL))
+	svr, err := server.New(store, *listenAddr, server.WithMetrics(m), server.WithDHFind(providerURLs...))
 	if err != nil {
 		panic(err)
 	}
