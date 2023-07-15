@@ -31,7 +31,6 @@ func New(w http.ResponseWriter, r *http.Request, preferJson bool) (ResponseWrite
 
 	var b []byte
 	pathType := path.Base(path.Dir(r.URL.Path))
-	fmt.Println("--->", pathType, "=", path.Base(r.URL.Path))
 	switch pathType {
 	case "multihash":
 		b, err = base58.Decode(strings.TrimSpace(path.Base(r.URL.Path)))
