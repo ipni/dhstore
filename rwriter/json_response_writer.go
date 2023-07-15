@@ -57,7 +57,7 @@ func newJsonResponseWriter(w http.ResponseWriter, r *http.Request, preferJson bo
 		if !preferJson {
 			// If there is no `Accept` header and JSON is preferred then be forgiving and fall back
 			// onto JSON media type. Otherwise, strictly require `Accept` header.
-			return jsonResponseWriter{}, apierror.New(errors.New("Accept header must be specified"), http.StatusBadRequest)
+			return jsonResponseWriter{}, apierror.New(errors.New("accept header must be specified"), http.StatusBadRequest)
 		}
 	} else if !okJson && !nd {
 		return jsonResponseWriter{}, apierror.New(fmt.Errorf("media type not supported: %s", accepts), http.StatusBadRequest)
