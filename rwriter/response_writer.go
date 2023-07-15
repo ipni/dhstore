@@ -2,7 +2,6 @@ package rwriter
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"path"
