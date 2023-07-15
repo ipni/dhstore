@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ipfs/go-cid"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
-	"github.com/ipni/dhstore/dhfind"
 	"github.com/ipni/dhstore/metrics"
+	"github.com/ipni/dhstore/rwriter"
+	"github.com/ipni/go-libipni/apierror"
 	"github.com/ipni/go-libipni/find/client"
 	"github.com/ipni/go-libipni/find/model"
 	"github.com/mr-tron/base58"
@@ -73,9 +73,9 @@ func New(dhs dhstore.DHStore, addr string, options ...Option) (*Server, error) {
 		},
 	}
 
-	mux.HandleFunc("/cid/", s.handleCidSubtree)
+	mux.HandleFunc("/cid/", s.handleMhOrCidSubtree)
 	mux.HandleFunc("/multihash", s.handleMh)
-	mux.HandleFunc("/multihash/", s.handleMhSubtree)
+	mux.HandleFunc("/multihash/", s.handleMhOrCidSubtree)
 	mux.HandleFunc("/metadata", s.handleMetadata)
 	mux.HandleFunc("/metadata/", s.handleMetadataSubtree)
 	mux.HandleFunc("/ready", s.handleReady)
@@ -130,67 +130,39 @@ func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleCidSubtree(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-	default:
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "", http.StatusMethodNotAllowed)
-	}
-
-	scid := strings.TrimPrefix(path.Base(r.URL.Path), "cid/")
-	c, err := cid.Decode(scid)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	b := c.Hash()
-	dm, err := multihash.Decode(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	mh := multihash.Multihash(b)
-
-	if dm.Code == multihash.DBL_SHA2_256 {
-		s.lookupMh(w, r, mh)
-	} else {
-		s.dhfindMh(w, r, mh, "cid")
-	}
-}
-
-func (s *Server) handleMhSubtree(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-	default:
+func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "", http.StatusMethodNotAllowed)
 		return
 	}
 
-	smh := strings.TrimPrefix(path.Base(r.URL.Path), "multihash/")
-
-	b, err := base58.Decode(smh)
+	wIface, err := rwriter.New(w, r, s.preferJSON)
 	if err != nil {
-		http.Error(w, multihash.ErrInvalidMultihash.Error(), http.StatusBadRequest)
+		log.Errorw("Failed to accept lookup request", "err", err)
+		writeError(w, err)
 		return
 	}
-	dm, err := multihash.Decode(b)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	mh := multihash.Multihash(b)
-
-	if dm.Code == multihash.DBL_SHA2_256 {
-		s.lookupMh(w, r, mh)
-	} else {
-		s.dhfindMh(w, r, mh, "multihash")
+	switch rspw := wIface.(type) {
+	case *rwriter.EncResponseWriter:
+		s.lookupMh(rspw, r)
+	case *rwriter.PlainResponseWriter:
+		s.dhfindMh(rspw, r)
 	}
 }
 
-func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.Multihash, httpPath string) {
+func (s *Server) lookupMh(w *rwriter.EncResponseWriter, r *http.Request) {
+	if s.metrics != nil {
+		start := time.Now()
+		defer func() {
+			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.Status())
+		}()
+	}
+
+	s.handleGetMh(w, r)
+}
+
+func (s *Server) dhfindMh(w *rwriter.PlainResponseWriter, r *http.Request) {
 	if s.dhfind == nil {
 		http.Error(w, "multihash must be of code dbl-sha2-256 when dhfind not enabled", http.StatusBadRequest)
 		return
@@ -198,26 +170,10 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 
 	var start time.Time
 	if s.metrics != nil {
-		ws := newResponseWriterWithStatus(w)
-		w = ws
 		start = time.Now()
 		defer func() {
-			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, httpPath, ws.status, false)
+			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.Status(), false)
 		}()
-	}
-
-	rspw := dhfind.NewIPNILookupResponseWriter(w, mh, s.preferJSON)
-
-	err := rspw.Accept(r)
-	if err != nil {
-		var httpErr *dhstore.ErrHttpResponse
-		if errors.As(err, &httpErr) {
-			httpErr.WriteTo(w)
-		} else {
-			log.Errorw("Failed to accept lookup request", "err", err)
-			http.Error(w, "", http.StatusInternalServerError)
-		}
-		return
 	}
 
 	// create result and error channels
@@ -228,19 +184,19 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 	go func() {
 		// FindAsync returns results on resChan until there are no more results
 		// or error. When finished, returns the error or nil.
-		errChan <- s.dhfind.FindAsync(r.Context(), mh, resChan)
+		errChan <- s.dhfind.FindAsync(r.Context(), w.Key(), resChan)
 	}()
 
 	var haveResults bool
-
+	var err error
 	for pr := range resChan {
 		if !haveResults {
 			haveResults = true
 			if s.metrics != nil {
-				s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, httpPath, http.StatusOK, true)
+				s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, w.PathType(), http.StatusOK, true)
 			}
 		}
-		if err = rspw.WriteProviderResult(pr); err != nil {
+		if err = w.WriteProviderResult(pr); err != nil {
 			log.Errorw("Failed to encode provider result", "err", err)
 			// This error is due to the client disconnecting. Continue reading
 			// from resChan until it is done due to the client context being
@@ -264,14 +220,19 @@ func (s *Server) dhfindMh(w http.ResponseWriter, r *http.Request, mh multihash.M
 		return
 	}
 
-	if err = rspw.Close(); err != nil {
-		var httpErr *dhstore.ErrHttpResponse
-		if errors.As(err, &httpErr) {
-			httpErr.WriteTo(w)
-		} else {
-			log.Errorw("Failed to finalize lookup results", "err", err)
-			http.Error(w, "", http.StatusInternalServerError)
-		}
+	if err = w.Close(); err != nil {
+		log.Errorw("Failed to finalize lookup results", "err", err)
+		writeError(w, err)
+		return
+	}
+}
+
+func writeError(w http.ResponseWriter, err error) {
+	var apiErr *apierror.Error
+	if errors.As(err, &apiErr) {
+		http.Error(w, apiErr.Error(), apiErr.Status())
+	} else {
+		http.Error(w, "", http.StatusInternalServerError)
 	}
 }
 
@@ -299,50 +260,22 @@ func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
 	return encMeta, err
 }
 
-func (s *Server) lookupMh(w http.ResponseWriter, r *http.Request, mh multihash.Multihash) {
-	if s.metrics != nil {
-		ws := newResponseWriterWithStatus(w)
-		w = ws
-		start := time.Now()
-		defer func() {
-			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, "multihash", ws.status)
-		}()
-	}
-
-	s.handleGetMh(newIPNILookupResponseWriter(w, mh, s.preferJSON), r)
-}
-
-func (s *Server) handleGetMh(w lookupResponseWriter, r *http.Request) {
-	if err := w.Accept(r); err != nil {
-		switch e := err.(type) {
-		case errHttpResponse:
-			e.WriteTo(w)
-		default:
-			log.Errorw("Failed to accept lookup request", "err", err)
-			http.Error(w, "", http.StatusInternalServerError)
-		}
-		return
-	}
+func (s *Server) handleGetMh(w *rwriter.EncResponseWriter, r *http.Request) {
 	evks, err := s.dhs.Lookup(w.Key())
 	if err != nil {
 		s.handleError(w, err)
 		return
 	}
 	for _, evk := range evks {
-		if err := w.WriteEncryptedValueKey(evk); err != nil {
+		if err = w.WriteEncryptedValueKey(evk); err != nil {
 			log.Errorw("Failed to encode encrypted value key", "err", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
 	}
 	if err = w.Close(); err != nil {
-		switch e := err.(type) {
-		case errHttpResponse:
-			e.WriteTo(w)
-		default:
-			log.Errorw("Failed to finalize lookup results", "err", err)
-			http.Error(w, "", http.StatusInternalServerError)
-		}
+		log.Errorw("Failed to finalize lookup results", "err", err)
+		writeError(w, err)
 	}
 }
 

@@ -2,7 +2,7 @@ package server
 
 import (
 	"github.com/ipni/dhstore"
-	"github.com/multiformats/go-multihash"
+	"github.com/ipni/go-libipni/find/model"
 )
 
 type (
@@ -14,11 +14,7 @@ type (
 		Value dhstore.EncryptedMetadata `json:"value"`
 	}
 	LookupResponse struct {
-		EncryptedMultihashResults []EncryptedMultihashResult `json:"EncryptedMultihashResults"`
-	}
-	EncryptedMultihashResult struct {
-		Multihash          multihash.Multihash         `json:"Multihash"`
-		EncryptedValueKeys []dhstore.EncryptedValueKey `json:"EncryptedValueKeys"`
+		EncryptedMultihashResults []model.EncryptedMultihashResult `json:"EncryptedMultihashResults"`
 	}
 	GetMetadataResponse struct {
 		EncryptedMetadata dhstore.EncryptedMetadata `json:"EncryptedMetadata"`

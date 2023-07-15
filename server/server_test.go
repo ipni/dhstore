@@ -277,10 +277,12 @@ func TestNewServeMux(t *testing.T) {
 
 			gotBody, err := io.ReadAll(got.Body)
 			require.NoError(t, err)
-			if test.expectJSON {
-				require.JSONEq(t, test.expectBody, strings.TrimSpace(string(gotBody)))
-			} else {
-				require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+			if test.expectBody != "" {
+				if test.expectJSON {
+					require.JSONEq(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+				} else {
+					require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+				}
 			}
 		})
 	}

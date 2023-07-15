@@ -23,3 +23,9 @@ type (
 		DeleteMetadata(HashedValueKey) error
 	}
 )
+
+type (
+	EncryptedValueKeyResult struct {
+		EncryptedValueKey EncryptedValueKey `json:"EncryptedValueKey"`
+	}
+)
