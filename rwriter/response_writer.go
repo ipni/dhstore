@@ -51,24 +51,19 @@ func New(w http.ResponseWriter, r *http.Request, preferJson bool) (ResponseWrite
 		return nil, apierror.New(err, http.StatusBadRequest)
 	}
 
-	var rspW ResponseWriter
-
-	mh := multihash.Multihash(b)
 	if dm.Code == multihash.DBL_SHA2_256 {
 		encW := &EncResponseWriter{
 			jsonResponseWriter: jsonW,
 			pathType:           pathType,
 		}
-		encW.encResult.Multihash = mh
-		rspW = encW
-	} else {
-		plainW := &PlainResponseWriter{
-			jsonResponseWriter: jsonW,
-			pathType:           pathType,
-		}
-		plainW.result.Multihash = mh
-		rspW = plainW
+		encW.encResult.Multihash = multihash.Multihash(b)
+		return encW, nil
 	}
 
-	return rspW, nil
+	plainW := &PlainResponseWriter{
+		jsonResponseWriter: jsonW,
+		pathType:           pathType,
+	}
+	plainW.result.Multihash = multihash.Multihash(b)
+	return plainW, nil
 }
