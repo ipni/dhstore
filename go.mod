@@ -3,9 +3,9 @@ module github.com/ipni/dhstore
 go 1.19
 
 require (
-	// Foundation DB golang binding version 7.1.33
-	// See: https://github.com/apple/foundationdb/tree/7.1.33/bindings/go
-	github.com/apple/foundationdb/bindings/go v0.0.0-20230508183941-1098aa0251f4
+	// Foundation DB golang binding version 7.3.7
+	// See: https://github.com/apple/foundationdb/tree/7.3.7/bindings/go
+	github.com/apple/foundationdb/bindings/go v0.0.0-20230710184144-e3b440ca0859
 	github.com/cockroachdb/pebble v0.0.0-20220726144858-a78491c0086f
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-log/v2 v2.5.1
@@ -65,7 +65,6 @@ require (
 	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
 	golang.org/x/sys v0.8.0 // indirect
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
