@@ -14,10 +14,10 @@ import (
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
 	"github.com/ipni/dhstore/metrics"
-	"github.com/ipni/dhstore/rwriter"
 	"github.com/ipni/go-libipni/apierror"
 	"github.com/ipni/go-libipni/find/client"
 	"github.com/ipni/go-libipni/find/model"
+	"github.com/ipni/go-libipni/rwriter"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-multihash"
 )
@@ -137,21 +137,21 @@ func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wIface, err := rwriter.New(w, r, s.preferJSON)
+	rspWriter, err := rwriter.New(w, r, rwriter.WithPreferJson(s.preferJSON))
 	if err != nil {
 		log.Errorw("Failed to accept lookup request", "err", err)
 		writeError(w, err)
 		return
 	}
-	switch rspw := wIface.(type) {
-	case *rwriter.EncResponseWriter:
-		s.lookupMh(rspw, r)
-	case *rwriter.PlainResponseWriter:
-		s.dhfindMh(rspw, r)
+
+	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 {
+		s.lookupMh(newEncResponseWriter(rspWriter), r)
+		return
 	}
+	s.dhfindMh(rwriter.NewProviderResponseWriter(rspWriter), r)
 }
 
-func (s *Server) lookupMh(w *rwriter.EncResponseWriter, r *http.Request) {
+func (s *Server) lookupMh(w *encResponseWriter, r *http.Request) {
 	if s.metrics != nil {
 		start := time.Now()
 		defer func() {
@@ -162,7 +162,7 @@ func (s *Server) lookupMh(w *rwriter.EncResponseWriter, r *http.Request) {
 	s.handleGetMh(w, r)
 }
 
-func (s *Server) dhfindMh(w *rwriter.PlainResponseWriter, r *http.Request) {
+func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	if s.dhfind == nil {
 		http.Error(w, "multihash must be of code dbl-sha2-256 when dhfind not enabled", http.StatusBadRequest)
 		return
@@ -184,7 +184,7 @@ func (s *Server) dhfindMh(w *rwriter.PlainResponseWriter, r *http.Request) {
 	go func() {
 		// FindAsync returns results on resChan until there are no more results
 		// or error. When finished, returns the error or nil.
-		errChan <- s.dhfind.FindAsync(r.Context(), w.Key(), resChan)
+		errChan <- s.dhfind.FindAsync(r.Context(), w.Multihash(), resChan)
 	}()
 
 	var haveResults bool
@@ -260,20 +260,20 @@ func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
 	return encMeta, err
 }
 
-func (s *Server) handleGetMh(w *rwriter.EncResponseWriter, r *http.Request) {
-	evks, err := s.dhs.Lookup(w.Key())
+func (s *Server) handleGetMh(w *encResponseWriter, r *http.Request) {
+	evks, err := s.dhs.Lookup(w.Multihash())
 	if err != nil {
 		s.handleError(w, err)
 		return
 	}
 	for _, evk := range evks {
-		if err = w.WriteEncryptedValueKey(evk); err != nil {
+		if err = w.writeEncryptedValueKey(evk); err != nil {
 			log.Errorw("Failed to encode encrypted value key", "err", err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
 	}
-	if err = w.Close(); err != nil {
+	if err = w.close(); err != nil {
 		log.Errorw("Failed to finalize lookup results", "err", err)
 		writeError(w, err)
 	}
