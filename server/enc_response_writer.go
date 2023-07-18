@@ -32,9 +32,7 @@ func (ew *encResponseWriter) writeEncryptedValueKey(evk dhstore.EncryptedValueKe
 		if err != nil {
 			return err
 		}
-		if err = ew.WriteND(); err != nil {
-			return err
-		}
+		ew.Flush()
 	} else {
 		ew.encResult.EncryptedValueKeys = append(ew.encResult.EncryptedValueKeys, evk)
 	}
