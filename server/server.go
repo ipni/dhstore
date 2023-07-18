@@ -255,9 +255,10 @@ func (s *Server) FindMultihash(ctx context.Context, dhmh multihash.Multihash) ([
 
 // FindMetadata implements the client.DHSToreAPI interface, to lookup encrypted
 // metadata using a hash of the value key.
+//
+// If metadata not found then no data and no error, (nil, nil), returned.
 func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
-	encMeta, err := s.dhs.GetMetadata(dhstore.HashedValueKey(hvk))
-	return encMeta, err
+	return s.dhs.GetMetadata(dhstore.HashedValueKey(hvk))
 }
 
 func (s *Server) handleGetMh(w *encResponseWriter, r *http.Request) {
