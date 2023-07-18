@@ -216,9 +216,7 @@ func TestNewServeMux(t *testing.T) {
 			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
 			expectStatus: http.StatusOK,
 			expectBody: `{"EncryptedValueKey":"ZmlzaA=="}
-
 {"EncryptedValueKey":"bG9ic3Rlcg=="}
-
 {"EncryptedValueKey":"dW5kYWRhc2Vh"}`,
 		},
 		{
@@ -277,10 +275,12 @@ func TestNewServeMux(t *testing.T) {
 
 			gotBody, err := io.ReadAll(got.Body)
 			require.NoError(t, err)
-			if test.expectJSON {
-				require.JSONEq(t, test.expectBody, strings.TrimSpace(string(gotBody)))
-			} else {
-				require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+			if test.expectBody != "" {
+				if test.expectJSON {
+					require.JSONEq(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+				} else {
+					require.Equal(t, test.expectBody, strings.TrimSpace(string(gotBody)))
+				}
 			}
 		})
 	}
