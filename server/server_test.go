@@ -352,6 +352,19 @@ func TestDHFind(t *testing.T) {
 	findRsp, err = model.UnmarshalFindResponse(gotBody)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(findRsp.MultihashResults))
+
+	// Test that results not found when only metadata is deleted.
+	deleteMetadata(t, ctxID, pid, store)
+
+	given = httptest.NewRequest(http.MethodGet, "/cid/bafybeigvgzoolc3drupxhlevdp2ugqcrbcsqfmcek2zxiw5wctk3xjpjwy", nil)
+	got = httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusNotFound, got.Code)
+
+	given = httptest.NewRequest(http.MethodGet, "/multihash/"+origMh.B58String(), nil)
+	got = httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusNotFound, got.Code)
 }
 
 func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte, providerID peer.ID, store *pebble.PebbleDHStore) multihash.Multihash {
@@ -376,6 +389,13 @@ func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte,
 	require.NoError(t, err)
 
 	return mh
+}
+
+func deleteMetadata(t *testing.T, ctxID []byte, providerID peer.ID, store *pebble.PebbleDHStore) {
+	vk := dhash.CreateValueKey(providerID, ctxID)
+
+	err := store.DeleteMetadata(dhash.SHA256(vk, nil))
+	require.NoError(t, err)
 }
 
 func providersHandler(w http.ResponseWriter, req *http.Request) {
