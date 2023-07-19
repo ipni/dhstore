@@ -55,6 +55,8 @@ func main() {
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
 	maxConcurrentCompactions := flag.Int("maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
 	l0StopWritesThreshold := flag.Int("l0StopWritesThreshold", 12, "Hard limit on Pebble L0 read-amplification. Writes are stopped when this threshold is reached.")
+	l0CompactionThreshold := flag.Int("l0CompactionThreshold", 2, "The amount of L0 read-amplification necessary to trigger an L0 compaction.")
+	l0CompactionFileThreshold := flag.Int("l0CompactionFileThreshold", 500, "The count of L0 files necessary to trigger an L0 compaction.")
 	experimentalL0CompactionConcurrency := flag.Int("experimentalL0CompactionConcurrency", 10, "The threshold of L0 read-amplification at which compaction concurrency is enabled (if CompactionDebtConcurrency was not already exceeded). Every multiple of this value enables another concurrent compaction up to MaxConcurrentCompactions.")
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	experimentalCompactionDebtConcurrency := flag.String("experimentalCompactionDebtConcurrency", "1Gi", "CompactionDebtConcurrency controls the threshold of compaction debt at which additional compaction concurrency slots are added. For every multiple of this value in compaction debt bytes, an additional concurrent compaction is added. This works \"on top\" of L0CompactionConcurrency, so the higher of the count of compaction concurrency slots as determined by the two options is chosen. Can be set in Mi or Gi.")
@@ -99,8 +101,9 @@ func main() {
 			MemTableSize:                64 << 20, // 64 MiB
 			MemTableStopWritesThreshold: 4,
 			LBaseMaxBytes:               64 << 20, // 64 MiB
-			L0CompactionThreshold:       2,
+			L0CompactionThreshold:       *l0CompactionThreshold,
 			L0StopWritesThreshold:       *l0StopWritesThreshold,
+			L0CompactionFileThreshold:   *l0CompactionFileThreshold,
 			DisableWAL:                  *dwal,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
 		}
