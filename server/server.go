@@ -53,7 +53,9 @@ func newResponseWriterWithStatus(w http.ResponseWriter) *responseWriterWithStatu
 
 func (rec *responseWriterWithStatus) WriteHeader(code int) {
 	rec.status = code
-	rec.ResponseWriter.WriteHeader(code)
+	if code != http.StatusOK {
+		rec.ResponseWriter.WriteHeader(code)
+	}
 }
 
 func New(dhs dhstore.DHStore, addr string, options ...Option) (*Server, error) {
@@ -295,7 +297,7 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, err)
 		return
 	}
-	log.Infow("Finished putting multihashes", "count", len(mir.Merges), "sample", mir.Merges[0].Key.B58String())
+	log.Debugw("Finished putting multihashes", "count", len(mir.Merges), "sample", mir.Merges[0].Key.B58String())
 
 	w.WriteHeader(http.StatusAccepted)
 }
