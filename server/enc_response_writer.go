@@ -15,9 +15,9 @@ type encResponseWriter struct {
 	encResult model.EncryptedMultihashResult
 }
 
-func newEncResponseWriter(w rwriter.ResponseWriter) *encResponseWriter {
+func newEncResponseWriter(w *rwriter.ResponseWriter) *encResponseWriter {
 	return &encResponseWriter{
-		ResponseWriter: w,
+		ResponseWriter: *w,
 		encResult: model.EncryptedMultihashResult{
 			Multihash: w.Multihash(),
 		},
