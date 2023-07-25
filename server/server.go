@@ -157,7 +157,7 @@ func (s *Server) lookupMh(w *encResponseWriter, r *http.Request) {
 	if s.metrics != nil {
 		start := time.Now()
 		defer func() {
-			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.Status())
+			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.StatusCode())
 		}()
 	}
 
@@ -174,7 +174,7 @@ func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	if s.metrics != nil {
 		start = time.Now()
 		defer func() {
-			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.Status(), false)
+			s.metrics.RecordDHFindLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.StatusCode(), false)
 		}()
 	}
 
