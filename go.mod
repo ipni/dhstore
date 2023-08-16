@@ -9,8 +9,8 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20220726144858-a78491c0086f
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/ipni/go-libipni v0.3.1
-	github.com/libp2p/go-libp2p v0.29.1
+	github.com/ipni/go-libipni v0.4.0
+	github.com/libp2p/go-libp2p v0.29.2
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.10.1
 	github.com/multiformats/go-multicodec v0.9.0

@@ -1,4 +1,4 @@
-FROM golang:1.19-bullseye as build
+FROM golang:1.20-bullseye as build
 
 ARG FDB_VERSION='7.3.7'
 ARG FDB_CLIENTS_DEB_SHA256_SUM='1b620971319c3ad149f2fb09b2fed639fb558120a296538133c4f2358836e983'
