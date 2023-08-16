@@ -48,6 +48,12 @@ To install `dhstore` CLI directly via Golang, run:
 $ go install github.com/ipni/dhstore/cmd/dhstore@latest
 ```
 
+To install `dhstore` without FDB support, run:
+
+```shell
+$ go install -tags nofdb github.com/ipni/dhstore/cmd/dhstore@latest
+```
+
 ## License
 
 [SPDX-License-Identifier: Apache-2.0 OR MIT](LICENSE.md)

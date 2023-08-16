@@ -1,3 +1,6 @@
+// To build without FDB support, run the command:
+//
+//	go build -tags nofdb ./cmd/dhstore
 package main
 
 import (
@@ -16,7 +19,6 @@ import (
 	"github.com/cockroachdb/pebble/bloom"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
-	"github.com/ipni/dhstore/fdb"
 	"github.com/ipni/dhstore/metrics"
 	dhpebble "github.com/ipni/dhstore/pebble"
 	"github.com/ipni/dhstore/server"
@@ -63,8 +65,6 @@ func main() {
 
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
-	fdbApiVersion := flag.Int("fdbApiVersion", 0, "Required. The FoundationDB API version as a numeric value")
-	fdbClusterFile := flag.String("fdbClusterFile", "", "Required. Path to ")
 	version := flag.Bool("version", false, "Show version information,")
 
 	flag.Parse()
@@ -139,7 +139,7 @@ func main() {
 		log.Infow("Store opened.", "path", path)
 	case "fdb":
 		var err error
-		store, err = fdb.NewFDBDHStore(fdb.WithApiVersion(*fdbApiVersion), fdb.WithClusterFile(*fdbClusterFile))
+		store, err = newFDBDHStore()
 		if err != nil {
 			panic(err)
 		}
