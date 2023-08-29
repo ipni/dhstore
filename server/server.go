@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -75,9 +74,12 @@ func New(dhs dhstore.DHStore, addr string, options ...Option) (*Server, error) {
 		},
 	}
 
-	mux.HandleFunc("/cid/", s.handleMhOrCidSubtree)
+	mux.HandleFunc("/cid/", s.handleNoEncMhOrCidSubtree)
+	mux.HandleFunc("/encrypted/cid/", s.handleEncMhOrCidSubtree)
 	mux.HandleFunc("/multihash", s.handleMh)
-	mux.HandleFunc("/multihash/", s.handleMhOrCidSubtree)
+	mux.HandleFunc("/encrypted/multihash", s.handleMh)
+	mux.HandleFunc("/multihash/", s.handleNoEncMhOrCidSubtree)
+	mux.HandleFunc("/encrypted/multihash/", s.handleEncMhOrCidSubtree)
 	mux.HandleFunc("/metadata", s.handleMetadata)
 	mux.HandleFunc("/metadata/", s.handleMetadataSubtree)
 	mux.HandleFunc("/ready", s.handleReady)
@@ -132,7 +134,15 @@ func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleEncMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+	s.handleMhOrCidSubtree(w, r, true)
+}
+
+func (s *Server) handleNoEncMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+	s.handleMhOrCidSubtree(w, r, false)
+}
+
+func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request, encrypted bool) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "", http.StatusMethodNotAllowed)
@@ -146,7 +156,7 @@ func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 {
+	if encrypted {
 		s.lookupMh(newEncResponseWriter(rspWriter), r)
 		return
 	}
@@ -370,7 +380,7 @@ func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
+	sk := path.Base(r.URL.Path)
 	hvk, err := base58.Decode(sk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
@@ -394,7 +404,7 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
-	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
+	sk := path.Base(r.URL.Path)
 	b, err := base58.Decode(sk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
