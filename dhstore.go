@@ -24,8 +24,6 @@ type (
 	}
 )
 
-type (
-	EncryptedValueKeyResult struct {
-		EncryptedValueKey EncryptedValueKey `json:"EncryptedValueKey"`
-	}
-)
+type EncryptedValueKeyResult struct {
+	EncryptedValueKey EncryptedValueKey `json:"EncryptedValueKey"`
+}

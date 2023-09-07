@@ -5,17 +5,12 @@ import (
 	"io"
 
 	"github.com/cockroachdb/pebble"
-	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
 	"github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multihash"
 )
 
-var (
-	logger = logging.Logger("store/pebble")
-
-	_ dhstore.DHStore = (*PebbleDHStore)(nil)
-)
+var _ dhstore.DHStore = (*PebbleDHStore)(nil)
 
 const (
 	encValueKeysCap          = 5
@@ -115,7 +110,6 @@ func (s *PebbleDHStore) Lookup(mh multihash.Multihash) ([]dhstore.EncryptedValue
 		if errors.Is(err, pebble.ErrNotFound) {
 			return nil, nil
 		}
-		logger.Debugw("failed to find multihash", "key", mh.B58String(), "err", err)
 		return nil, err
 	}
 	defer vkbClose.Close()

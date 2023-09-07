@@ -157,26 +157,62 @@ func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request, en
 	}
 
 	if encrypted {
-		s.lookupMh(newEncResponseWriter(rspWriter), r)
+		s.lookupMh(newEncResponseWriter(rspWriter), r, true)
 		return
 	}
+	// If multihash is DBL_SHA2_256, then this is probably an encrypted lookup,
+	// so try that first. If no results found, then do a non-encrypted lookup.
+	// It is possible for a non-encrypted multihash to be DBL_SHA2_256.
+	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 {
+		if s.lookupMh(newEncResponseWriter(rspWriter), r, s.dhfind == nil) {
+			return
+		}
+		// Fall-through to try unncrypted lookup.
+	}
+
+	// Do non-encrypted lookup. If there are no results, then do not try an
+	// encrypted lookup since all encrypted multihashes will be DBL_SHA2_256.
 	s.dhfindMh(rwriter.NewProviderResponseWriter(rspWriter), r)
 }
 
-func (s *Server) lookupMh(w *encResponseWriter, r *http.Request) {
+func (s *Server) lookupMh(w *encResponseWriter, r *http.Request, writeIfNotFound bool) bool {
+	var start time.Time
 	if s.metrics != nil {
-		start := time.Now()
+		start = time.Now()
 		defer func() {
+			if start.IsZero() {
+				return // metrics skipped
+			}
 			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.StatusCode())
 		}()
 	}
 
-	s.handleGetMh(w, r)
+	evks, err := s.dhs.Lookup(w.Multihash())
+	if err != nil {
+		s.handleError(w, err)
+		return true
+	}
+	if evks == nil && !writeIfNotFound {
+		start = time.Time{} // skip mettics
+		return false
+	}
+	for _, evk := range evks {
+		if err = w.writeEncryptedValueKey(evk); err != nil {
+			log.Errorw("Failed to encode encrypted value key", "err", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return true
+		}
+	}
+	if err = w.close(); err != nil {
+		log.Errorw("Failed to finalize lookup results", "err", err)
+		writeError(w, err)
+	}
+	return true
 }
 
 func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	if s.dhfind == nil {
-		http.Error(w, "multihash must be of code dbl-sha2-256 when dhfind not enabled", http.StatusBadRequest)
+		http.Error(w, "unencrypted lookup not available when dhfind not enabled", http.StatusBadRequest)
 		return
 	}
 
@@ -228,7 +264,7 @@ func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	// If there were no results - return 404, otherwise finalize the response
 	// and return 200.
 	if !haveResults {
-		http.Error(w, "", http.StatusNotFound)
+		http.Error(w, "not found by unencrypted lookup", http.StatusNotFound)
 		return
 	}
 
@@ -271,25 +307,6 @@ func (s *Server) FindMultihash(ctx context.Context, dhmh multihash.Multihash) ([
 // If metadata not found then no data and no error, (nil, nil), returned.
 func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
 	return s.dhs.GetMetadata(dhstore.HashedValueKey(hvk))
-}
-
-func (s *Server) handleGetMh(w *encResponseWriter, r *http.Request) {
-	evks, err := s.dhs.Lookup(w.Multihash())
-	if err != nil {
-		s.handleError(w, err)
-		return
-	}
-	for _, evk := range evks {
-		if err = w.writeEncryptedValueKey(evk); err != nil {
-			log.Errorw("Failed to encode encrypted value key", "err", err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-	}
-	if err = w.close(); err != nil {
-		log.Errorw("Failed to finalize lookup results", "err", err)
-		writeError(w, err)
-	}
 }
 
 func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {

@@ -135,11 +135,11 @@ func TestNewServeMux(t *testing.T) {
 			expectBody:   "input isn't valid multihash",
 		},
 		{
-			name:         "GET /multihash/subtree with valid non-dbl-sha2-256 multihash is 400",
+			name:         "GET /multihash/subtree with valid non-dbl-sha2-256 multihash an no dhfind is 400",
 			onMethod:     http.MethodGet,
 			onTarget:     "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
 			expectStatus: http.StatusBadRequest,
-			expectBody:   "multihash must be of code dbl-sha2-256 when dhfind not enabled",
+			expectBody:   "unencrypted lookup not available when dhfind not enabled",
 		},
 		{
 			name:         "GET /multihash/subtree with valid non-dbl-sha2-256 multihash and dhfind is 404",
@@ -166,6 +166,27 @@ func TestNewServeMux(t *testing.T) {
 			expectStatus: http.StatusOK,
 			expectBody:   `{"EncryptedMultihashResults": [{ "Multihash": "ViAJKqT0hRtxENbtjWwvnRogQknxUnhswNrose3ZjEP8Iw==", "EncryptedValueKeys": ["ZmlzaA=="] }]}`,
 			expectJSON:   true,
+		},
+		{ // Probably incrypted - it is encrypted
+			name: "GET /multihash/subtree with valid present dbl-sha2-256 multihash encrypted lookup is 200",
+			onStore: func(t *testing.T, store dhstore.DHStore) {
+				mh, err := multihash.FromB58String("2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82")
+				require.NoError(t, err)
+				require.NoError(t, store.MergeIndexes([]dhstore.Index{{Key: mh, Value: []byte("fish")}}))
+			},
+			onMethod:     http.MethodGet,
+			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
+			expectStatus: http.StatusOK,
+			expectBody:   `{"EncryptedMultihashResults": [{ "Multihash": "ViAJKqT0hRtxENbtjWwvnRogQknxUnhswNrose3ZjEP8Iw==", "EncryptedValueKeys": ["ZmlzaA=="] }]}`,
+			expectJSON:   true,
+		},
+		{ // Probably incrypted - it is not encrypted
+			name:         "GET /multihash/subtree with valid absent dbl-sha2-256 multihash unencrypted lookup is 404",
+			onMethod:     http.MethodGet,
+			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
+			expectStatus: http.StatusNotFound,
+			expectBody:   `not found by unencrypted lookup`,
+			dhfind:       true,
 		},
 		{
 			name:           "streaming GET /multihash/subtree with bad length is 400",
@@ -221,7 +242,7 @@ func TestNewServeMux(t *testing.T) {
 			onMethod:       http.MethodGet,
 			onTarget:       "/multihash/QmcgwdNjFQVhKt6aWWtSPgdLbNvULRoFMU6CCYwHsN3EEH",
 			expectStatus:   http.StatusBadRequest,
-			expectBody:     "multihash must be of code dbl-sha2-256 when dhfind not enabled",
+			expectBody:     "unencrypted lookup not available when dhfind not enabled",
 		},
 		{
 			name:           "streaming GET /multihash/subtree with valid non-dbl-sha2-256 multihash and dhfind is 404",
