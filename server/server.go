@@ -163,15 +163,12 @@ func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request, en
 	// If multihash is DBL_SHA2_256, then this is probably an encrypted lookup,
 	// so try that first. If no results found, then do a non-encrypted lookup.
 	// It is possible for a non-encrypted multihash to be DBL_SHA2_256.
-	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 {
-		if s.lookupMh(newEncResponseWriter(rspWriter), r, s.dhfind == nil) {
-			return
-		}
-		// Fall-through to try unncrypted lookup.
+	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 && s.lookupMh(newEncResponseWriter(rspWriter), r, s.dhfind == nil) {
+		return
 	}
-
-	// Do non-encrypted lookup. If there are no results, then do not try an
-	// encrypted lookup since all encrypted multihashes will be DBL_SHA2_256.
+	// Do non-encrypted lookup. All encrypted multihashes are DBL_SHA2_256, so
+	// there is no need to do an encrypted lookup for a non-DBL_SHA2_256
+	// multihash.
 	s.dhfindMh(rwriter.NewProviderResponseWriter(rspWriter), r)
 }
 
