@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"strings"
 	"time"
 
 	logging "github.com/ipfs/go-log/v2"
@@ -75,9 +74,12 @@ func New(dhs dhstore.DHStore, addr string, options ...Option) (*Server, error) {
 		},
 	}
 
-	mux.HandleFunc("/cid/", s.handleMhOrCidSubtree)
+	mux.HandleFunc("/cid/", s.handleNoEncMhOrCidSubtree)
+	mux.HandleFunc("/encrypted/cid/", s.handleEncMhOrCidSubtree)
 	mux.HandleFunc("/multihash", s.handleMh)
-	mux.HandleFunc("/multihash/", s.handleMhOrCidSubtree)
+	mux.HandleFunc("/encrypted/multihash", s.handleMh)
+	mux.HandleFunc("/multihash/", s.handleNoEncMhOrCidSubtree)
+	mux.HandleFunc("/encrypted/multihash/", s.handleEncMhOrCidSubtree)
 	mux.HandleFunc("/metadata", s.handleMetadata)
 	mux.HandleFunc("/metadata/", s.handleMetadataSubtree)
 	mux.HandleFunc("/ready", s.handleReady)
@@ -132,7 +134,15 @@ func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleEncMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+	s.handleMhOrCidSubtree(w, r, true)
+}
+
+func (s *Server) handleNoEncMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
+	s.handleMhOrCidSubtree(w, r, false)
+}
+
+func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request, encrypted bool) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "", http.StatusMethodNotAllowed)
@@ -146,27 +156,60 @@ func (s *Server) handleMhOrCidSubtree(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 {
-		s.lookupMh(newEncResponseWriter(rspWriter), r)
+	if encrypted {
+		s.lookupMh(newEncResponseWriter(rspWriter), r, true)
 		return
 	}
+	// If multihash is DBL_SHA2_256, then this is probably an encrypted lookup,
+	// so try that first. If no results found, then do a non-encrypted lookup.
+	// It is possible for a non-encrypted multihash to be DBL_SHA2_256.
+	if rspWriter.MultihashCode() == multihash.DBL_SHA2_256 && s.lookupMh(newEncResponseWriter(rspWriter), r, s.dhfind == nil) {
+		return
+	}
+	// Do non-encrypted lookup. All encrypted multihashes are DBL_SHA2_256, so
+	// there is no need to do an encrypted lookup for a non-DBL_SHA2_256
+	// multihash.
 	s.dhfindMh(rwriter.NewProviderResponseWriter(rspWriter), r)
 }
 
-func (s *Server) lookupMh(w *encResponseWriter, r *http.Request) {
+func (s *Server) lookupMh(w *encResponseWriter, r *http.Request, writeIfNotFound bool) bool {
+	var start time.Time
 	if s.metrics != nil {
-		start := time.Now()
+		start = time.Now()
 		defer func() {
+			if start.IsZero() {
+				return // metrics skipped
+			}
 			s.metrics.RecordHttpLatency(context.Background(), time.Since(start), r.Method, w.PathType(), w.StatusCode())
 		}()
 	}
 
-	s.handleGetMh(w, r)
+	evks, err := s.dhs.Lookup(w.Multihash())
+	if err != nil {
+		s.handleError(w, err)
+		return true
+	}
+	if evks == nil && !writeIfNotFound {
+		start = time.Time{} // skip mettics
+		return false
+	}
+	for _, evk := range evks {
+		if err = w.writeEncryptedValueKey(evk); err != nil {
+			log.Errorw("Failed to encode encrypted value key", "err", err)
+			http.Error(w, "", http.StatusInternalServerError)
+			return true
+		}
+	}
+	if err = w.close(); err != nil {
+		log.Errorw("Failed to finalize lookup results", "err", err)
+		writeError(w, err)
+	}
+	return true
 }
 
 func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	if s.dhfind == nil {
-		http.Error(w, "multihash must be of code dbl-sha2-256 when dhfind not enabled", http.StatusBadRequest)
+		http.Error(w, "unencrypted lookup not available when dhfind not enabled", http.StatusBadRequest)
 		return
 	}
 
@@ -218,7 +261,7 @@ func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	// If there were no results - return 404, otherwise finalize the response
 	// and return 200.
 	if !haveResults {
-		http.Error(w, "", http.StatusNotFound)
+		http.Error(w, "not found by unencrypted lookup", http.StatusNotFound)
 		return
 	}
 
@@ -261,25 +304,6 @@ func (s *Server) FindMultihash(ctx context.Context, dhmh multihash.Multihash) ([
 // If metadata not found then no data and no error, (nil, nil), returned.
 func (s *Server) FindMetadata(ctx context.Context, hvk []byte) ([]byte, error) {
 	return s.dhs.GetMetadata(dhstore.HashedValueKey(hvk))
-}
-
-func (s *Server) handleGetMh(w *encResponseWriter, r *http.Request) {
-	evks, err := s.dhs.Lookup(w.Multihash())
-	if err != nil {
-		s.handleError(w, err)
-		return
-	}
-	for _, evk := range evks {
-		if err = w.writeEncryptedValueKey(evk); err != nil {
-			log.Errorw("Failed to encode encrypted value key", "err", err)
-			http.Error(w, "", http.StatusInternalServerError)
-			return
-		}
-	}
-	if err = w.close(); err != nil {
-		log.Errorw("Failed to finalize lookup results", "err", err)
-		writeError(w, err)
-	}
 }
 
 func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
@@ -370,7 +394,7 @@ func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
-	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
+	sk := path.Base(r.URL.Path)
 	hvk, err := base58.Decode(sk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
@@ -394,7 +418,7 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
-	sk := strings.TrimPrefix(path.Base(r.URL.Path), "metadata/")
+	sk := path.Base(r.URL.Path)
 	b, err := base58.Decode(sk)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
