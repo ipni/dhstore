@@ -1,4 +1,4 @@
-//go:build nofdb
+//go:build !fdb
 
 package main
 
