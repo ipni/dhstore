@@ -1,6 +1,6 @@
-// To build without FDB support, run the command:
+// To build with FDB support, run the command:
 //
-//	go build -tags nofdb ./cmd/dhstore
+//	go build -tags fdb ./cmd/dhstore
 package main
 
 import (
