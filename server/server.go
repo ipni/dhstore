@@ -321,8 +321,6 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, err)
 		return
 	}
-	log.Debugw("Finished putting multihashes", "count", len(mir.Merges), "sample", mir.Merges[0].Key.B58String())
-
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -368,7 +366,6 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusAccepted)
-	log.Infow("Finished putting metadata", "keyLen", len(pmr.Key), "valueLen", len(pmr.Value))
 }
 
 func (s *Server) handleMetadataSubtree(w http.ResponseWriter, r *http.Request) {
