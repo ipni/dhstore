@@ -254,6 +254,7 @@ func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	// FindAsync finished, check for error.
 	err = <-errChan
 	if err != nil {
+		log.Errorw("Failed dhfind multihash lookup", "err", err)
 		s.handleError(w, err)
 		return
 	}
@@ -310,14 +311,17 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 	var mir MergeIndexRequest
 	err := json.NewDecoder(r.Body).Decode(&mir)
 	if err != nil {
+		log.Errorw("Cannot decode merge index request", "err", err)
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 	if len(mir.Merges) == 0 {
+		log.Error("Cannot put multihashes with no merges specified")
 		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
 		return
 	}
 	if err = s.dhs.MergeIndexes(mir.Merges); err != nil {
+		log.Errorw("Failed to merge indexes", "err", err)
 		s.handleError(w, err)
 		return
 	}
@@ -358,10 +362,12 @@ func (s *Server) handlePutMetadata(w http.ResponseWriter, r *http.Request) {
 	var pmr PutMetadataRequest
 	err := json.NewDecoder(r.Body).Decode(&pmr)
 	if err != nil {
+		log.Errorw("Cannot decode put metadata request", "err", err)
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 	if err = s.dhs.PutMetadata(pmr.Key, pmr.Value); err != nil {
+		log.Errorw("Failed to put metadata", "err", err)
 		s.handleError(w, err)
 		return
 	}
@@ -394,11 +400,13 @@ func (s *Server) handleGetMetadata(w http.ResponseWriter, r *http.Request) {
 	sk := path.Base(r.URL.Path)
 	hvk, err := base58.Decode(sk)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
+		log.Errorw("Cannot decode metadata key as base58", "err", err, "key", sk)
+		http.Error(w, fmt.Sprintf("cannot decode key %s as base58: %s", sk, err.Error()), http.StatusBadRequest)
 		return
 	}
 	emd, err := s.FindMetadata(r.Context(), hvk)
 	if err != nil {
+		log.Errorw("Failed to find metadata", "err", err)
 		s.handleError(w, err)
 		return
 	}
@@ -418,11 +426,13 @@ func (s *Server) handleDeleteMetadata(w http.ResponseWriter, r *http.Request) {
 	sk := path.Base(r.URL.Path)
 	b, err := base58.Decode(sk)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("cannot decode key %s as bas58: %s", sk, err.Error()), http.StatusBadRequest)
+		log.Errorw("Cannot decode metadata key as base58", "err", err, "key", sk)
+		http.Error(w, fmt.Sprintf("cannot decode key %s as base58: %s", sk, err.Error()), http.StatusBadRequest)
 		return
 	}
 	hvk := dhstore.HashedValueKey(b)
 	if err = s.dhs.DeleteMetadata(hvk); err != nil {
+		log.Errorw("Failed to delete metadata", "err", err)
 		s.handleError(w, err)
 		return
 	}
