@@ -185,7 +185,6 @@ func TestNewServeMux(t *testing.T) {
 			onMethod:     http.MethodGet,
 			onTarget:     "/multihash/2wvdp9y1J63yDvaPawP4kUjXezRLcu9x9u2DAB154dwai82",
 			expectStatus: http.StatusNotFound,
-			expectBody:   `not found by unencrypted lookup`,
 			dhfind:       true,
 		},
 		{

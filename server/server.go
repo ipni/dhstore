@@ -262,7 +262,7 @@ func (s *Server) dhfindMh(w *rwriter.ProviderResponseWriter, r *http.Request) {
 	// If there were no results - return 404, otherwise finalize the response
 	// and return 200.
 	if !haveResults {
-		http.Error(w, "not found by unencrypted lookup", http.StatusNotFound)
+		http.Error(w, "", http.StatusNotFound)
 		return
 	}
 
