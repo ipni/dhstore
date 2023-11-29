@@ -454,10 +454,18 @@ func TestGetDeleteIndexes(t *testing.T) {
 	const providerID = "12D3KooWKRyzVWW6ChFjQjK4miCty85Niy48tpPV95XdKu1BcvMA"
 	pid, err := peer.Decode(providerID)
 	require.NoError(t, err)
+	const providerID2 = "12D3KooWQk7r5WKUfTn9dVntWnmvfHfVBaghWtDdZNkRExQ7NwK1"
+	pid2, err := peer.Decode(providerID2)
+	require.NoError(t, err)
+
 	ctxID := []byte("fish")
 	metadata := []byte("lobster")
+	ctxID2 := []byte("rodent")
+	metadata2 := []byte("squirrel")
 
 	dhMh := loadStore(t, origMh, ctxID, metadata, pid, store)
+	dhMh2 := loadStore(t, origMh, ctxID2, metadata2, pid2, store)
+
 	s, err := server.New(store, "", server.WithDHFind(provServ.URL))
 	require.NoError(t, err)
 	subject := s.Handler()
@@ -477,7 +485,7 @@ func TestGetDeleteIndexes(t *testing.T) {
 	require.Len(t, findRsp.MultihashResults, 0)
 	require.Len(t, findRsp.EncryptedMultihashResults, 1)
 	encMhResult := findRsp.EncryptedMultihashResults[0]
-	require.Len(t, encMhResult.EncryptedValueKeys, 1)
+	require.Len(t, encMhResult.EncryptedValueKeys, 2)
 	evk := encMhResult.EncryptedValueKeys[0]
 	vk, err := dhash.DecryptValueKey(evk, origMh)
 	require.NoError(t, err)
@@ -485,6 +493,14 @@ func TestGetDeleteIndexes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, pid, respPid)
 	require.Equal(t, ctxID, respCtxID)
+
+	evk2 := encMhResult.EncryptedValueKeys[1]
+	vk2, err := dhash.DecryptValueKey(evk2, origMh)
+	require.NoError(t, err)
+	respPid2, respCtxID2, err := dhash.SplitValueKey(vk2)
+	require.NoError(t, err)
+	require.Equal(t, pid2, respPid2)
+	require.Equal(t, ctxID2, respCtxID2)
 
 	// Get metadata for find response.
 	hvk := dhash.SHA256(vk, nil)
@@ -511,30 +527,54 @@ func TestGetDeleteIndexes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, metadata, respMeta)
 
-	// Delete indexes
-
-	// Create a delete request. It uses the same data model as a merge request.
-	idx := dhstore.Index{
-		Key:   dhMh,
-		Value: evk,
-	}
-	mergeReq := server.MergeIndexRequest{
-		Merges: []dhstore.Index{idx},
-	}
+	// Delete first provider from from index.
+	mergeReq := makeMergeReq(dhMh, evk)
 	reqData, err := json.Marshal(mergeReq)
 	require.NoError(t, err)
-
 	given = httptest.NewRequest(http.MethodDelete, "/multihash", bytes.NewBuffer(reqData))
-	given.Header.Add("Accept", "application/json")
 	got = httptest.NewRecorder()
 	subject.ServeHTTP(got, given)
 	require.Equal(t, http.StatusAccepted, got.Code)
 
-	// Get encrypted multihash find response - should return StatusNotFound
+	// Check that first provider is deleted
+	given = httptest.NewRequest(http.MethodGet, "/encrypted/multihash/"+dhMh.B58String(), nil)
+	got = httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusOK, got.Code)
+	gotBody, err = io.ReadAll(got.Body)
+	require.NoError(t, err)
+	t.Log("Got encrypted find response using double-hashed multihash:", string(gotBody))
+	findRsp, err = model.UnmarshalFindResponse(gotBody)
+	require.NoError(t, err)
+	require.Len(t, findRsp.EncryptedMultihashResults, 1)
+	encMhResult = findRsp.EncryptedMultihashResults[0]
+	require.Len(t, encMhResult.EncryptedValueKeys, 1)
+	require.Equal(t, evk2, encMhResult.EncryptedValueKeys[0])
+
+	// Delete 2nd provider from index.
+	mergeReq = makeMergeReq(dhMh2, evk2)
+	reqData, err = json.Marshal(mergeReq)
+	require.NoError(t, err)
+	given = httptest.NewRequest(http.MethodDelete, "/multihash", bytes.NewBuffer(reqData))
+	got = httptest.NewRecorder()
+	subject.ServeHTTP(got, given)
+	require.Equal(t, http.StatusAccepted, got.Code)
+
+	// Check that index is now completely deleted.
 	given = httptest.NewRequest(http.MethodGet, "/encrypted/multihash/"+dhMh.B58String(), nil)
 	got = httptest.NewRecorder()
 	subject.ServeHTTP(got, given)
 	require.Equal(t, http.StatusNotFound, got.Code)
+}
+
+func makeMergeReq(dhMh multihash.Multihash, evk dhstore.EncryptedValueKey) server.MergeIndexRequest {
+	idx := dhstore.Index{
+		Key:   dhMh,
+		Value: evk,
+	}
+	return server.MergeIndexRequest{
+		Merges: []dhstore.Index{idx},
+	}
 }
 
 func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte, providerID peer.ID, store *pebble.PebbleDHStore) multihash.Multihash {
