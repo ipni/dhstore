@@ -1,6 +1,7 @@
 package pebble
 
 import (
+	"bytes"
 	"errors"
 	"io"
 
@@ -74,6 +75,87 @@ func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
 		}
 		_ = mhk.Close()
 		_ = closer.Close()
+	}
+	return batch.Commit(pebble.NoSync)
+}
+
+// DeleteIndexes removes dh-multihash to encrypted-valueKey mappings. This is
+// the inverse of MergeIndexes.
+func (s *PebbleDHStore) DeleteIndexes(indexes []dhstore.Index) error {
+	keygen := s.p.leaseSimpleKeyer()
+	defer keygen.Close()
+	batch := s.db.NewBatch()
+
+	for _, index := range indexes {
+		dmh, err := multihash.Decode(index.Key)
+		if err != nil {
+			return dhstore.ErrMultihashDecode{Err: err, Mh: index.Key}
+		}
+		if multicodec.Code(dmh.Code) != multicodec.DblSha2_256 {
+			return dhstore.ErrUnsupportedMulticodecCode{Code: multicodec.Code(dmh.Code)}
+		}
+
+		// Lookup the encrypted multihash keys for this dh-multihash.
+		mhk, err := keygen.multihashKey(index.Key)
+		if err != nil {
+			return err
+		}
+		vkb, vkbClose, err := s.db.Get(mhk.buf)
+		if err != nil {
+			_ = mhk.Close()
+			if errors.Is(err, pebble.ErrNotFound) {
+				continue
+			}
+			return err
+		}
+		encValueKeys, err := s.unmarshalEncryptedIndexKeys(vkb)
+		vkbClose.Close()
+		if err != nil {
+			_ = mhk.Close()
+			return err
+		}
+
+		// Remove the encrypted value key from the returned set of values.
+		var removed bool
+		for i, evk := range encValueKeys {
+			if bytes.Equal(evk, index.Value) {
+				if len(encValueKeys) == 1 {
+					encValueKeys = nil
+				} else {
+					encValueKeys[i] = encValueKeys[len(encValueKeys)-1]
+					encValueKeys = encValueKeys[:len(encValueKeys)-1]
+				}
+				removed = true
+				break
+			}
+		}
+		if len(encValueKeys) == 0 {
+			// Multihash does not map to any remaining values, so delete it.
+			err = batch.Delete(mhk.buf, pebble.NoSync)
+			_ = mhk.Close()
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		if !removed {
+			// No changes, continue to next multihash.
+			_ = mhk.Close()
+			continue
+		}
+
+		// Update the set of value keys the multihash maps to.
+		mevks, mevksCloser, err := s.marshalEncryptedIndexKeys(encValueKeys)
+		if err != nil {
+			_ = mhk.Close()
+			return err
+		}
+		err = batch.Set(mhk.buf, mevks, pebble.NoSync)
+		_ = mevksCloser.Close()
+		_ = mhk.Close()
+		if err != nil {
+			return err
+		}
 	}
 	return batch.Commit(pebble.NoSync)
 }
@@ -177,6 +259,14 @@ func (s *PebbleDHStore) Close() error {
 func (s *PebbleDHStore) marshalEncryptedIndexKey(evk dhstore.EncryptedValueKey) ([]byte, io.Closer, error) {
 	buf := s.p.leaseSectionBuff()
 	buf.writeSection(evk)
+	return buf.buf, buf, nil
+}
+
+func (s *PebbleDHStore) marshalEncryptedIndexKeys(evks []dhstore.EncryptedValueKey) ([]byte, io.Closer, error) {
+	buf := s.p.leaseSectionBuff()
+	for _, evk := range evks {
+		buf.writeSection(evk)
+	}
 	return buf.buf, buf, nil
 }
 

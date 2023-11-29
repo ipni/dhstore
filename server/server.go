@@ -128,8 +128,11 @@ func (s *Server) handleMh(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPut:
 		s.handlePutMhs(w, r)
+	case http.MethodDelete:
+		s.handleDeleteMhs(w, r)
 	default:
 		w.Header().Set("Allow", http.MethodPut)
+		w.Header().Add("Allow", http.MethodDelete)
 		http.Error(w, "", http.StatusMethodNotAllowed)
 	}
 }
@@ -322,6 +325,27 @@ func (s *Server) handlePutMhs(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = s.dhs.MergeIndexes(mir.Merges); err != nil {
 		log.Errorw("Failed to merge indexes", "err", err)
+		s.handleError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) handleDeleteMhs(w http.ResponseWriter, r *http.Request) {
+	var mir MergeIndexRequest
+	err := json.NewDecoder(r.Body).Decode(&mir)
+	if err != nil {
+		log.Errorw("Cannot decode delete index request", "err", err)
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+	if len(mir.Merges) == 0 {
+		log.Error("Cannot delete multihashes with no merges specified")
+		http.Error(w, "at least one merge must be specified", http.StatusBadRequest)
+		return
+	}
+	if err = s.dhs.DeleteIndexes(mir.Merges); err != nil {
+		log.Errorw("Failed to delete indexes", "err", err)
 		s.handleError(w, err)
 		return
 	}

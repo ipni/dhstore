@@ -17,6 +17,7 @@ type (
 	DHStore interface {
 		io.Closer
 		MergeIndexes([]Index) error
+		DeleteIndexes([]Index) error
 		PutMetadata(HashedValueKey, EncryptedMetadata) error
 		Lookup(multihash.Multihash) ([]EncryptedValueKey, error)
 		GetMetadata(HashedValueKey) (EncryptedMetadata, error)
