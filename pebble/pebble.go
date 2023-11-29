@@ -130,17 +130,21 @@ func (s *PebbleDHStore) DeleteIndexes(indexes []dhstore.Index) error {
 			}
 		}
 		if len(encValueKeys) == 0 {
-			if err = batch.Delete(mhk.buf, pebble.NoSync); err != nil {
-				_ = mhk.Close()
+			// Multihash does not map to any remaining values, so delete it.
+			err = batch.Delete(mhk.buf, pebble.NoSync)
+			_ = mhk.Close()
+			if err != nil {
 				return err
 			}
+			continue
 		}
 		if !removed {
+			// No changes, continue to next multihash.
 			_ = mhk.Close()
 			continue
 		}
 
-		// Set value with remaining value keys.
+		// Update the set of value keys the multihash maps to.
 		mevks, mevksCloser, err := s.marshalEncryptedIndexKeys(encValueKeys)
 		if err != nil {
 			_ = mhk.Close()
