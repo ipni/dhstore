@@ -96,28 +96,10 @@ func (f *FDBDHStore) MergeIndexes(indexes []dhstore.Index) error {
 			if len(vk) > maxValueBytes {
 				return nil, fmt.Errorf("value key cannot be larger than 100 KB, got: %d", len(vk))
 			}
-			// Check if vk is longer than the allowed max key prefix. If it is, then
-			// hash it and use the original as the value associated to the key.
-			// If not, then use vk as is as the prefix and leave value empty.
-			// This strategy will result in:
-			//  1. lower disk utilisation and
-			//  2. lower CPU consumption
-			// by opportunistically avoiding:
-			// - the re-hash of vk just to get a short key prefix, and
-			// - the double storage of vk when it is the same as prefix.
-			// On lookup, we then check if the value is empty and if it is we return the prefix.
-			var prefix, value []byte
-			if len(vk) > maxKeyPrefixLen {
-				var err error
-				prefix, err = f.hash(vk)
-				if err != nil {
-					return nil, err
-				}
-				value = vk
-			} else {
-				prefix = vk
+			key, value, err := f.makeFDBKeyValue(dmh.Digest, vk)
+			if err != nil {
+				return nil, err
 			}
-			key := f.mhdir.Pack(tuple.Tuple{dmh.Digest, prefix})
 			transaction.Set(key, value)
 		}
 		return nil, nil
@@ -146,32 +128,44 @@ func (f *FDBDHStore) DeleteIndexes(indexes []dhstore.Index) error {
 			if len(vk) > maxValueBytes {
 				return nil, fmt.Errorf("value key cannot be larger than 100 KB, got: %d", len(vk))
 			}
-			// Check if vk is longer than the allowed max key prefix. If it is, then
-			// hash it and use the original as the value associated to the key.
-			// If not, then use vk as is as the prefix and leave value empty.
-			// This strategy will result in:
-			//  1. lower disk utilisation and
-			//  2. lower CPU consumption
-			// by opportunistically avoiding:
-			// - the re-hash of vk just to get a short key prefix, and
-			// - the double storage of vk when it is the same as prefix.
-			// On lookup, we then check if the value is empty and if it is we return the prefix.
-			var prefix, value []byte
-			if len(vk) > maxKeyPrefixLen {
-				var err error
-				prefix, err = f.hash(vk)
-				if err != nil {
-					return nil, err
-				}
-				value = vk
-			} else {
-				prefix = vk
+			key, _, err := f.makeFDBKeyValue(dmh.Digest, vk)
+			if err != nil {
+				return err
 			}
-			transaction.Clear(f.mhdir.Pack(tuple.Tuple{dmh.Digest, prefix}))
+			transaction.Clear(key)
 		}
 		return nil, nil
 	})
 	return err
+}
+
+func (f *FDBDHStore) makeFDBKeyValue(keyData []byte, vk EncryptedValueKey) (fdb.Key, []byte, error) {
+	// Check if vk is longer than the allowed max key prefix. If it is, then
+	// hash it and use the original as the value associated to the key. If not,
+	// then use vk as is as the prefix and leave value empty.
+	//
+	// This strategy will result in:
+	//  1. lower disk utilisation and
+	//  2. lower CPU consumption
+	//
+	// by opportunistically avoiding:
+	// - the re-hash of vk just to get a short key prefix, and
+	// - the double storage of vk when it is the same as prefix.
+	//
+	// On lookup, we then check if the value is empty and if it is we return
+	// the prefix.
+	var prefix, value []byte
+	if len(vk) > maxKeyPrefixLen {
+		var err error
+		prefix, err = f.hash(vk)
+		if err != nil {
+			return
+		}
+		value = vk
+	} else {
+		prefix = vk
+	}
+	return f.mhdir.Pack(tuple.Tuple{keyData, prefix}), value, nil
 }
 
 func (f *FDBDHStore) hash(vk []byte) ([]byte, error) {
