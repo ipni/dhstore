@@ -122,8 +122,8 @@ func (s *PebbleDHStore) DeleteIndexes(indexes []dhstore.Index) error {
 				if len(encValueKeys) == 1 {
 					encValueKeys = nil
 				} else {
-					encValueKeys[i] = encValueKeys[len(encValueKeys)-1]
-					encValueKeys = encValueKeys[:len(encValueKeys)-1]
+					// Preserve order when removing value key.
+					encValueKeys = append(encValueKeys[:i], encValueKeys[i+1:]...)
 				}
 				removed = true
 				break
