@@ -50,12 +50,13 @@ func main() {
 	}
 
 	var providersURLs arrayFlags
+	var maxConcurrentCompactions int
 	storePath := flag.String("storePath", "./dhstore/store", "The path at which the dhstore data persisted.")
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrics HTTP server listen address.")
 	flag.Var(&providersURLs, "providersURL", "Providers URL to enable dhfind. Multiple OK")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
-	maxConcurrentCompactions := flag.Int("maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
+	flag.IntVar(&maxConcurrentCompactions, "maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
 	l0StopWritesThreshold := flag.Int("l0StopWritesThreshold", 12, "Hard limit on Pebble L0 read-amplification. Writes are stopped when this threshold is reached.")
 	l0CompactionThreshold := flag.Int("l0CompactionThreshold", 2, "The amount of L0 read-amplification necessary to trigger an L0 compaction.")
 	l0CompactionFileThreshold := flag.Int("l0CompactionFileThreshold", 500, "The count of L0 files necessary to trigger an L0 compaction.")
@@ -97,7 +98,7 @@ func main() {
 		opts := &pebble.Options{
 			BytesPerSync:                10 << 20, // 10 MiB
 			WALBytesPerSync:             10 << 20, // 10 MiB
-			MaxConcurrentCompactions:    *maxConcurrentCompactions,
+			MaxConcurrentCompactions:    func() int { return maxConcurrentCompactions },
 			MemTableSize:                64 << 20, // 64 MiB
 			MemTableStopWritesThreshold: 4,
 			LBaseMaxBytes:               64 << 20, // 64 MiB

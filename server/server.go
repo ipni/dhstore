@@ -349,6 +349,7 @@ func (s *Server) handleDeleteMhs(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, err)
 		return
 	}
+	log.Infow("Deleted indexes", "count", len(mir.Merges))
 	w.WriteHeader(http.StatusAccepted)
 }
 
