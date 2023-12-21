@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"sort"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ipni/dhstore"
@@ -48,9 +49,15 @@ func NewPebbleDHStore(path string, opts *pebble.Options) (*PebbleDHStore, error)
 }
 
 func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
+	// Sort indexes to reduce cursor churn.
+	sort.Slice(indexes, func(i, j int) bool {
+		return bytes.Compare(indexes[i].Key, indexes[j].Key) == -1
+	})
+
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
 	batch := s.db.NewBatch()
+
 	for _, index := range indexes {
 		dmh, err := multihash.Decode(index.Key)
 		if err != nil {
@@ -82,6 +89,11 @@ func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
 // DeleteIndexes removes dh-multihash to encrypted-valueKey mappings. This is
 // the inverse of MergeIndexes.
 func (s *PebbleDHStore) DeleteIndexes(indexes []dhstore.Index) error {
+	// Sort indexes to reduce cursor churn.
+	sort.Slice(indexes, func(i, j int) bool {
+		return bytes.Compare(indexes[i].Key, indexes[j].Key) == -1
+	})
+
 	keygen := s.p.leaseSimpleKeyer()
 	defer keygen.Close()
 	batch := s.db.NewBatch()
