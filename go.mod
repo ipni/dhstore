@@ -6,11 +6,11 @@ require (
 	// Foundation DB golang binding version 7.3.7
 	// See: https://github.com/apple/foundationdb/tree/7.3.7/bindings/go
 	github.com/apple/foundationdb/bindings/go v0.0.0-20230710184144-e3b440ca0859
-	github.com/cockroachdb/pebble v0.0.0-20220726144858-a78491c0086f
+	github.com/cockroachdb/pebble v1.0.0
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/ipni/go-libipni v0.5.7
-	github.com/libp2p/go-libp2p v0.32.1
+	github.com/ipni/go-libipni v0.5.8
+	github.com/libp2p/go-libp2p v0.32.2
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-multiaddr v0.12.0
 	github.com/multiformats/go-multicodec v0.9.0
@@ -39,7 +39,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/golang/snappy v0.0.3 // indirect
+	github.com/golang/snappy v0.0.4 // indirect
 	github.com/klauspost/compress v1.17.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/kr/pretty v0.2.1 // indirect
