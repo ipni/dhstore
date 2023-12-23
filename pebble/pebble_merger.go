@@ -25,15 +25,14 @@ type valueKeysValueMerger struct {
 func (s *PebbleDHStore) newValueKeysMerger() *pebble.Merger {
 	return &pebble.Merger{
 		Merge: func(k, value []byte) (pebble.ValueMerger, error) {
-			// Fall back on default merger if the key is not of type multihash, i.e. the only key
-			// type that corresponds to value-keys.
-			switch keyPrefix(k[0]) {
-			case multihashKeyPrefix:
+			// Use specialized merger for multihash keys.
+			if keyPrefix(k[0]) == multihashKeyPrefix {
 				v := &valueKeysValueMerger{s: s}
 				return v, v.MergeNewer(value)
-			default:
-				return pebble.DefaultMerger.Merge(k, value)
 			}
+			// Use default merger for non-multihash type keys, i.e. the
+			// only key type that corresponds to value-keys.
+			return pebble.DefaultMerger.Merge(k, value)
 		},
 		Name: valueKeysMergerName,
 	}
