@@ -110,8 +110,7 @@ func main() {
 		}
 
 		opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
-		opts.Experimental.MinDeletionRate = 128 << 20   // 128 MiB
-		opts.Experimental.CompactionDebtConcurrency = int(parsedExperimentalCompactionDebtConcurrency)
+		opts.Experimental.CompactionDebtConcurrency = parsedExperimentalCompactionDebtConcurrency
 		opts.Experimental.L0CompactionConcurrency = *experimentalL0CompactionConcurrency
 
 		const numLevels = 7
