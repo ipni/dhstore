@@ -47,7 +47,6 @@ func newDHStore(b *testing.B) dhstore.DHStore {
 	}
 
 	opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
-	opts.Experimental.MinDeletionRate = 128 << 20   // 128 MiB
 
 	const numLevels = 7
 	opts.Levels = make([]pebble.LevelOptions, numLevels)
