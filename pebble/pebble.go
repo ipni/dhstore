@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"sort"
+	"slices"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/ipni/dhstore"
@@ -50,8 +50,8 @@ func NewPebbleDHStore(path string, opts *pebble.Options) (*PebbleDHStore, error)
 
 func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
 	// Sort indexes to reduce cursor churn.
-	sort.Slice(indexes, func(i, j int) bool {
-		return bytes.Compare(indexes[i].Key, indexes[j].Key) == -1
+	slices.SortFunc(indexes, func(a, b dhstore.Index) int {
+		return bytes.Compare(a.Key, b.Key)
 	})
 
 	keygen := s.p.leaseSimpleKeyer()
@@ -90,8 +90,8 @@ func (s *PebbleDHStore) MergeIndexes(indexes []dhstore.Index) error {
 // the inverse of MergeIndexes.
 func (s *PebbleDHStore) DeleteIndexes(indexes []dhstore.Index) error {
 	// Sort indexes to reduce cursor churn.
-	sort.Slice(indexes, func(i, j int) bool {
-		return bytes.Compare(indexes[i].Key, indexes[j].Key) == -1
+	slices.SortFunc(indexes, func(a, b dhstore.Index) int {
+		return bytes.Compare(a.Key, b.Key)
 	})
 
 	keygen := s.p.leaseSimpleKeyer()
