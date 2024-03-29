@@ -590,15 +590,16 @@ func loadStore(t *testing.T, origMh multihash.Multihash, ctxID, metadata []byte,
 	encValueKey, err := dhash.EncryptValueKey(vk, origMh)
 	require.NoError(t, err)
 
-	mh, err := dhash.SecondMultihash(origMh)
-	require.NoError(t, err)
-
+	mh2 := dhash.SecondMultihash(origMh)
 	err = store.MergeIndexes([]dhstore.Index{
-		{Key: mh, Value: []byte(encValueKey)},
+		{
+			Key:   mh2,
+			Value: []byte(encValueKey),
+		},
 	})
 	require.NoError(t, err)
 
-	return mh
+	return mh2
 }
 
 func deleteMetadata(t *testing.T, ctxID []byte, providerID peer.ID, store *pebble.PebbleDHStore) {
