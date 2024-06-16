@@ -6,7 +6,7 @@ require (
 	// Foundation DB golang binding version 7.3.7
 	// See: https://github.com/apple/foundationdb/tree/7.3.7/bindings/go
 	github.com/apple/foundationdb/bindings/go v0.0.0-20230710184144-e3b440ca0859
-	github.com/cockroachdb/pebble v1.1.0
+	github.com/cockroachdb/pebble v1.1.1
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/ipni/go-libipni v0.6.8
@@ -29,13 +29,14 @@ require (
 	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/cockroachdb/errors v1.11.1 // indirect
+	github.com/cockroachdb/errors v1.11.3 // indirect
+	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
-	github.com/getsentry/sentry-go v0.18.0 // indirect
+	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
