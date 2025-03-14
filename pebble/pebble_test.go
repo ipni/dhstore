@@ -3,8 +3,9 @@ package pebble_test
 import (
 	"testing"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/ipni/dhstore"
-	"github.com/ipni/dhstore/pebble"
+	dhpebble "github.com/ipni/dhstore/pebble"
 	"github.com/multiformats/go-multihash"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +33,7 @@ func TestPebbleDHStore_MultihashCheck(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			subject, err := pebble.NewPebbleDHStore(t.TempDir(), nil)
+			subject, err := dhpebble.NewPebbleDHStore(t.TempDir(), nil)
 			require.NoError(t, err)
 			defer subject.Close()
 
@@ -46,4 +47,49 @@ func TestPebbleDHStore_MultihashCheck(t *testing.T) {
 			require.Nil(t, gotV)
 		})
 	}
+}
+
+func TestPebbleDHStore_UpdateFormat(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := dhpebble.NewPebbleDHStore(tmpDir, nil)
+	require.NoError(t, err)
+	defer store.Close()
+
+	value1 := dhstore.EncryptedValueKey("lobster")
+	value2 := dhstore.EncryptedValueKey("eel")
+	value3 := dhstore.EncryptedValueKey("grouper")
+	mh, err := multihash.Sum([]byte("fish"), multihash.DBL_SHA2_256, -1)
+	require.NoError(t, err)
+
+	err = store.MergeIndexes([]dhstore.Index{
+		{Key: mh, Value: value1},
+		{Key: mh, Value: value2},
+		{Key: mh, Value: value3},
+	})
+	require.NoError(t, err)
+
+	err = store.DeleteIndexes([]dhstore.Index{
+		{Key: mh, Value: value3},
+	})
+	require.NoError(t, err)
+
+	gotV, err := store.Lookup(mh)
+	require.NoError(t, err)
+	require.NotNil(t, gotV)
+	require.Len(t, gotV, 2)
+
+	store.Close()
+
+	opts := &pebble.Options{
+		FormatMajorVersion: pebble.FormatNewest,
+	}
+
+	store, err = dhpebble.NewPebbleDHStore(tmpDir, opts)
+	require.NoError(t, err)
+	defer store.Close()
+
+	gotV, err = store.Lookup(mh)
+	require.NoError(t, err)
+	require.NotNil(t, gotV)
+	require.Len(t, gotV, 2)
 }

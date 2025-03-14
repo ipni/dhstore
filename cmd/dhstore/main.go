@@ -107,6 +107,7 @@ func main() {
 			L0CompactionFileThreshold:   *l0CompactionFileThreshold,
 			DisableWAL:                  *dwal,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
+			FormatMajorVersion:          pebble.FormatNewest,
 		}
 
 		opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
