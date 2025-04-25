@@ -50,6 +50,7 @@ func main() {
 	}
 
 	var providersURLs arrayFlags
+	var formatMajorVersion int
 	var maxConcurrentCompactions int
 	storePath := flag.String("storePath", "./dhstore/store", "The path at which the dhstore data persisted.")
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
@@ -63,6 +64,7 @@ func main() {
 	experimentalL0CompactionConcurrency := flag.Int("experimentalL0CompactionConcurrency", 10, "The threshold of L0 read-amplification at which compaction concurrency is enabled (if CompactionDebtConcurrency was not already exceeded). Every multiple of this value enables another concurrent compaction up to MaxConcurrentCompactions.")
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	experimentalCompactionDebtConcurrency := flag.String("experimentalCompactionDebtConcurrency", "1Gi", "CompactionDebtConcurrency controls the threshold of compaction debt at which additional compaction concurrency slots are added. For every multiple of this value in compaction debt bytes, an additional concurrent compaction is added. This works \"on top\" of L0CompactionConcurrency, so the higher of the count of compaction concurrency slots as determined by the two options is chosen. Can be set in Mi or Gi.")
+	flag.IntVar(&formatMajorVersion, "formatMajorVersion", 0, fmt.Sprintf("Sets the format of pebble on-disk files. Unset or 0 uses the current version. Latest supported version is %d", pebble.FormatNewest))
 
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
@@ -107,7 +109,12 @@ func main() {
 			L0CompactionFileThreshold:   *l0CompactionFileThreshold,
 			DisableWAL:                  *dwal,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
-			FormatMajorVersion:          pebble.FormatNewest,
+		}
+		if formatMajorVersion != 0 {
+			opts.FormatMajorVersion = pebble.FormatMajorVersion(formatMajorVersion)
+			if opts.FormatMajorVersion < pebble.FormatNewest {
+				log.Warnf("A newer pebble db format is available: %d", pebble.FormatNewest)
+			}
 		}
 
 		opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
