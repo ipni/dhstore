@@ -23,6 +23,8 @@ Usage of ./dhstore:
     	CompactionDebtConcurrency controls the threshold of compaction debt at which additional compaction concurrency slots are added. For every multiple of this value in compaction debt bytes, an additional concurrent compaction is added. This works "on top" of L0CompactionConcurrency, so the higher of the count of compaction concurrency slots as determined by the two options is chosen. Can be set in Mi or Gi. (default "1Gi")
   -experimentalL0CompactionConcurrency int
     	The threshold of L0 read-amplification at which compaction concurrency is enabled (if CompactionDebtConcurrency was not already exceeded). Every multiple of this value enables another concurrent compaction up to MaxConcurrentCompactions. (default 10)
+  -formatMajorVersion int
+    	Sets the format of pebble on-disk files. Unset or 0 uses the current version. Latest supported version is 16
   -l0CompactionFileThreshold int
     	The count of L0 files necessary to trigger an L0 compaction. (default 500)
   -l0CompactionThreshold int
