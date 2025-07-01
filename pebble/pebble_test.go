@@ -3,7 +3,7 @@ package pebble_test
 import (
 	"testing"
 
-	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/v2"
 	"github.com/ipni/dhstore"
 	dhpebble "github.com/ipni/dhstore/pebble"
 	"github.com/multiformats/go-multihash"
