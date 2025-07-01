@@ -1,27 +1,27 @@
 module github.com/ipni/dhstore
 
-go 1.23.6
+go 1.23.10
 
 require (
 	// Foundation DB golang binding version 7.3.7
 	// See: https://github.com/apple/foundationdb/tree/7.3.7/bindings/go
 	github.com/apple/foundationdb/bindings/go v0.0.0-20230710184144-e3b440ca0859
 	github.com/cockroachdb/pebble v1.1.4
-	github.com/ipfs/go-log/v2 v2.5.1
-	github.com/ipni/go-libipni v0.6.18
-	github.com/libp2p/go-libp2p v0.41.1
+	github.com/ipfs/go-log/v2 v2.6.0
+	github.com/ipni/go-libipni v0.6.19
+	github.com/libp2p/go-libp2p v0.42.0
 	github.com/mr-tron/base58 v1.2.0
-	github.com/multiformats/go-multiaddr v0.15.0
-	github.com/multiformats/go-multicodec v0.9.0
+	github.com/multiformats/go-multiaddr v0.16.0
+	github.com/multiformats/go-multicodec v0.9.2
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/multiformats/go-varint v0.0.7
-	github.com/prometheus/client_golang v1.21.1
+	github.com/prometheus/client_golang v1.22.0
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.14.0
 	go.opentelemetry.io/otel/exporters/prometheus v0.33.0
 	go.opentelemetry.io/otel/metric v0.33.0
 	go.opentelemetry.io/otel/sdk/metric v0.33.0
-	lukechampine.com/blake3 v1.4.0
+	lukechampine.com/blake3 v1.4.1
 )
 
 require (
@@ -54,19 +54,19 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_model v0.6.1 // indirect
-	github.com/prometheus/common v0.62.0 // indirect
-	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/prometheus/client_model v0.6.2 // indirect
+	github.com/prometheus/common v0.64.0 // indirect
+	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.11.1 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
+	golang.org/x/crypto v0.39.0 // indirect
+	golang.org/x/exp v0.0.0-20250606033433-dcc06ee1d476 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
