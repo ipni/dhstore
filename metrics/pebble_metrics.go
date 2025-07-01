@@ -3,7 +3,7 @@ package metrics
 import (
 	"context"
 
-	"github.com/cockroachdb/pebble"
+	"github.com/cockroachdb/pebble/v2"
 	"go.opentelemetry.io/otel/attribute"
 	cmetric "go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/instrument"
