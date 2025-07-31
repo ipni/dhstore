@@ -65,6 +65,7 @@ func main() {
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	experimentalCompactionDebtConcurrency := flag.String("experimentalCompactionDebtConcurrency", "1Gi", "CompactionDebtConcurrency controls the threshold of compaction debt at which additional compaction concurrency slots are added. For every multiple of this value in compaction debt bytes, an additional concurrent compaction is added. This works \"on top\" of L0CompactionConcurrency, so the higher of the count of compaction concurrency slots as determined by the two options is chosen. Can be set in Mi or Gi.")
 	flag.IntVar(&formatMajorVersion, "formatMajorVersion", 0, fmt.Sprintf("Sets the format of pebble on-disk files. Unset or 0 uses the current version. Latest supported version is %d", pebble.FormatNewest))
+	readCompactionRate := flag.String("readCompactionRate", "20MiB", "The frequency of read triggered compactions.")
 
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
@@ -93,6 +94,10 @@ func main() {
 		if err != nil {
 			log.Fatalw("Failed to parse experimental compaction debt concurrency", "err", err)
 		}
+		parsedReadCompactionRate, err := parseBytesIEC(*readCompactionRate)
+		if err != nil {
+			log.Fatalw("Failed to parse read compaction rate", "err", err)
+		}
 
 		// Default options copied from cockroachdb with the addition of a custom sized block cache and configurable compaction options.
 		// See:
@@ -117,7 +122,7 @@ func main() {
 			}
 		}
 
-		opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
+		opts.Experimental.ReadCompactionRate = int64(parsedReadCompactionRate)
 		opts.Experimental.CompactionDebtConcurrency = parsedExperimentalCompactionDebtConcurrency
 		opts.Experimental.L0CompactionConcurrency = *experimentalL0CompactionConcurrency
 
@@ -214,6 +219,9 @@ func parseBytesIEC(str string) (uint64, error) {
 	var n int
 	var err error
 	switch suffix {
+	case "ki":
+		n, err = strconv.Atoi(str[:len(str)-2])
+		multiplier = 1 << 10
 	case "mi":
 		n, err = strconv.Atoi(str[:len(str)-2])
 		multiplier = 1 << 20
