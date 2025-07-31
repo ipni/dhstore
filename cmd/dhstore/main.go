@@ -65,7 +65,7 @@ func main() {
 	blockCacheSize := flag.String("blockCacheSize", "1Gi", "Size of pebble block cache. Can be set in Mi or Gi.")
 	experimentalCompactionDebtConcurrency := flag.String("experimentalCompactionDebtConcurrency", "1Gi", "CompactionDebtConcurrency controls the threshold of compaction debt at which additional compaction concurrency slots are added. For every multiple of this value in compaction debt bytes, an additional concurrent compaction is added. This works \"on top\" of L0CompactionConcurrency, so the higher of the count of compaction concurrency slots as determined by the two options is chosen. Can be set in Mi or Gi.")
 	flag.IntVar(&formatMajorVersion, "formatMajorVersion", 0, fmt.Sprintf("Sets the format of pebble on-disk files. Unset or 0 uses the current version. Latest supported version is %d", pebble.FormatNewest))
-	readCompactionRate := flag.String("readCompactionRate", "20MiB", "The frequency of read triggered compactions.")
+	readCompactionRate := flag.String("readCompactionRate", "20Mi", "The frequency of read triggered compactions.")
 
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
