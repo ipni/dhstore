@@ -66,6 +66,12 @@ func main() {
 	experimentalCompactionDebtConcurrency := flag.String("experimentalCompactionDebtConcurrency", "1Gi", "CompactionDebtConcurrency controls the threshold of compaction debt at which additional compaction concurrency slots are added. For every multiple of this value in compaction debt bytes, an additional concurrent compaction is added. This works \"on top\" of L0CompactionConcurrency, so the higher of the count of compaction concurrency slots as determined by the two options is chosen. Can be set in Mi or Gi.")
 	flag.IntVar(&formatMajorVersion, "formatMajorVersion", 0, fmt.Sprintf("Sets the format of pebble on-disk files. Unset or 0 uses the current version. Latest supported version is %d", pebble.FormatNewest))
 	readCompactionRate := flag.String("readCompactionRate", "20Mi", "The frequency of read triggered compactions.")
+	bytesPerSync := flag.String("bytesPerSync", "10Mi", "The number of bytes to write before syncing the sstable.")
+	walBytesPerSync := flag.String("walBytesPerSync", "10Mi", "The number of bytes to write before syncing the WAL. This is only used if the WAL is enabled.")
+	memTableSize := flag.String("memTableSize", "64Mi", "The size of the memtable.")
+	memTableStopWritesThreshold := flag.Int("memTableStopWritesThreshold", 4, "The number of times the memtable size can be exceeded before writes are stopped.")
+	maxOpenFiles := flag.Int("maxOpenFiles", 1000, "The maximum number of open files for the store.")
+	targetByteDeletionRate := flag.Int("targetByteDeletionRate", 0, "The target byte deletion rate for the store. 0 means pacing is disabled.")
 
 	llvl := flag.String("logLevel", "info", "The logging level. Only applied if GOLOG_LOG_LEVEL environment variable is unset.")
 	storeType := flag.String("storeType", "pebble", "The store type to use. only `pebble` and `fdb` is supported. Defaults to `pebble`. When `fdb` is selected, all `fdb*` args must be set.")
@@ -98,22 +104,36 @@ func main() {
 		if err != nil {
 			log.Fatalw("Failed to parse read compaction rate", "err", err)
 		}
+		parsedBytesPerSync, err := parseBytesIEC(*bytesPerSync)
+		if err != nil {
+			log.Fatalw("Failed to parse bytesPerSync", "err", err)
+		}
+		parsedWalBytesPerSync, err := parseBytesIEC(*walBytesPerSync)
+		if err != nil {
+			log.Fatalw("Failed to parse walBytesPerSync", "err", err)
+		}
+		parsedMemTableSize, err := parseBytesIEC(*memTableSize)
+		if err != nil {
+			log.Fatalw("Failed to parse memTableSize", "err", err)
+		}
 
 		// Default options copied from cockroachdb with the addition of a custom sized block cache and configurable compaction options.
 		// See:
 		// - https://github.com/cockroachdb/cockroach/blob/v22.1.6/pkg/storage/pebble.go#L479
 		opts := &pebble.Options{
-			BytesPerSync:                10 << 20, // 10 MiB
-			WALBytesPerSync:             10 << 20, // 10 MiB
+			BytesPerSync:                int(parsedBytesPerSync),
+			WALBytesPerSync:             int(parsedWalBytesPerSync),
 			MaxConcurrentCompactions:    func() int { return maxConcurrentCompactions },
-			MemTableSize:                64 << 20, // 64 MiB
-			MemTableStopWritesThreshold: 4,
+			MemTableSize:                parsedMemTableSize,
+			MemTableStopWritesThreshold: *memTableStopWritesThreshold,
 			LBaseMaxBytes:               64 << 20, // 64 MiB
 			L0CompactionThreshold:       *l0CompactionThreshold,
 			L0StopWritesThreshold:       *l0StopWritesThreshold,
 			L0CompactionFileThreshold:   *l0CompactionFileThreshold,
 			DisableWAL:                  *dwal,
 			WALMinSyncInterval:          func() time.Duration { return 30 * time.Second },
+			MaxOpenFiles:                *maxOpenFiles,
+			TargetByteDeletionRate:      *targetByteDeletionRate,
 		}
 		if formatMajorVersion != 0 {
 			opts.FormatMajorVersion = pebble.FormatMajorVersion(formatMajorVersion)
