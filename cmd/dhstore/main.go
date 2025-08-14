@@ -160,7 +160,9 @@ func main() {
 			l.EnsureDefaults()
 		}
 		opts.Levels[numLevels-1].FilterPolicy = nil
-		opts.Cache = pebble.NewCache(int64(parsedBlockCacheSize))
+		blockCache := pebble.NewCache(int64(parsedBlockCacheSize))
+		defer blockCache.Unref()
+		opts.Cache = blockCache
 
 		path := filepath.Clean(*storePath)
 		pbstore, err := dhpebble.NewPebbleDHStore(path, opts)
