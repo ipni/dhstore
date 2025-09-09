@@ -6,7 +6,7 @@ require (
 	// Foundation DB golang binding version 7.3.7
 	// See: https://github.com/apple/foundationdb/tree/7.3.7/bindings/go
 	github.com/apple/foundationdb/bindings/go v0.0.0-20230710184144-e3b440ca0859
-	github.com/cockroachdb/pebble/v2 v2.0.6
+	github.com/cockroachdb/pebble/v2 v2.0.7
 	github.com/ipfs/go-log/v2 v2.8.1
 	github.com/ipni/go-libipni v0.7.0
 	github.com/libp2p/go-libp2p v0.43.0
