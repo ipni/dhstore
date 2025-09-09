@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/bloom"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipni/dhstore"
 	"github.com/ipni/dhstore/metrics"
@@ -51,12 +51,13 @@ func main() {
 
 	var providersURLs arrayFlags
 	var formatMajorVersion int
-	var maxConcurrentCompactions int
+	var minConcurrentCompactions, maxConcurrentCompactions int
 	storePath := flag.String("storePath", "./dhstore/store", "The path at which the dhstore data persisted.")
 	listenAddr := flag.String("listenAddr", "0.0.0.0:40080", "The dhstore HTTP server listen address.")
 	metrcisAddr := flag.String("metricsAddr", "0.0.0.0:40081", "The dhstore metrics HTTP server listen address.")
 	flag.Var(&providersURLs, "providersURL", "Providers URL to enable dhfind. Multiple OK")
 	dwal := flag.Bool("disableWAL", false, "Weather to disable WAL in Pebble dhstore.")
+	flag.IntVar(&minConcurrentCompactions, "minConcurrentCompactions", 1, "Specifies the minimum number of concurrent Pebble compactions under normal circumstances.")
 	flag.IntVar(&maxConcurrentCompactions, "maxConcurrentCompactions", 10, "Specifies the maximum number of concurrent Pebble compactions. As a rule of thumb set it to the number of the CPU cores.")
 	l0StopWritesThreshold := flag.Int("l0StopWritesThreshold", 12, "Hard limit on Pebble L0 read-amplification. Writes are stopped when this threshold is reached.")
 	l0CompactionThreshold := flag.Int("l0CompactionThreshold", 2, "The amount of L0 read-amplification necessary to trigger an L0 compaction.")
@@ -123,7 +124,7 @@ func main() {
 		opts := &pebble.Options{
 			BytesPerSync:                int(parsedBytesPerSync),
 			WALBytesPerSync:             int(parsedWalBytesPerSync),
-			MaxConcurrentCompactions:    func() int { return maxConcurrentCompactions },
+			CompactionConcurrencyRange:  func() (int, int) { return minConcurrentCompactions, maxConcurrentCompactions },
 			MemTableSize:                parsedMemTableSize,
 			MemTableStopWritesThreshold: *memTableStopWritesThreshold,
 			LBaseMaxBytes:               64 << 20, // 64 MiB
@@ -146,20 +147,14 @@ func main() {
 		opts.Experimental.CompactionDebtConcurrency = parsedExperimentalCompactionDebtConcurrency
 		opts.Experimental.L0CompactionConcurrency = *experimentalL0CompactionConcurrency
 
-		const numLevels = 7
-		opts.Levels = make([]pebble.LevelOptions, numLevels)
-		for i := 0; i < numLevels; i++ {
-			l := &opts.Levels[i]
-			l.BlockSize = 32 << 10       // 32 KiB
-			l.IndexBlockSize = 256 << 10 // 256 KiB
-			l.FilterPolicy = bloom.FilterPolicy(10)
-			l.FilterType = pebble.TableFilter
-			if i > 0 {
-				l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
-			}
-			l.EnsureDefaults()
+		for i := range opts.Levels {
+			opts.Levels[i].BlockSize = 32 << 10       // 32 KiB
+			opts.Levels[i].IndexBlockSize = 256 << 10 // 256 KiB
+			opts.Levels[i].FilterPolicy = bloom.FilterPolicy(10)
+			opts.Levels[i].FilterType = pebble.TableFilter
 		}
-		opts.Levels[numLevels-1].FilterPolicy = nil
+		opts.Levels[len(opts.Levels)-1].FilterPolicy = nil
+		opts.EnsureDefaults()
 		blockCache := pebble.NewCache(int64(parsedBlockCacheSize))
 		defer blockCache.Unref()
 		opts.Cache = blockCache
