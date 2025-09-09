@@ -51,10 +51,10 @@ type pebbleMetrics struct {
 	// when no other compactions are picked.
 	compactMarkedFiles asyncint64.Gauge
 
-	// l0NumFiles is the total number of files in L0. The number of L0 files should not be in the high thousands.
-	// High values indicate heavy write load that is causing accumulation of files in level 0. These files are not
+	// l0TablesCount is the total count of sstables in L0. The number of L0 sstables should not be in the high thousands
+	// High values indicate heavy write load that is causing accumulation of sstables in level 0. These sstables are not
 	// being compacted quickly enough to lower levels, resulting in a misshapen LSM.
-	l0NumFiles asyncint64.Gauge
+	l0TablesCount asyncint64.Gauge
 }
 
 func (pm *pebbleMetrics) start() error {
@@ -155,11 +155,11 @@ func (pm *pebbleMetrics) start() error {
 		return err
 	}
 
-	if pm.l0NumFiles, err = pm.meter.AsyncInt64().Gauge(
-		"ipni/dhstore/pebble/compact_l0_num_files",
+	if pm.l0TablesCount, err = pm.meter.AsyncInt64().Gauge(
+		"ipni/dhstore/pebble/compact_l0_tables_count",
 		instrument.WithUnit(unit.Dimensionless),
-		instrument.WithDescription("The total number of files in L0. The number of L0 files should not be in the high thousands."+
-			" High values indicate heavy write load that is causing accumulation of files in level 0. These files are not"+
+		instrument.WithDescription("The total count of sstables in L0. The number of L0 sstables should not be in the high thousands."+
+			" High values indicate heavy write load that is causing accumulation of sstables in level 0. These sstables are not"+
 			" being compacted quickly enough to lower levels, resulting in a misshapen LSM."),
 	); err != nil {
 		return err
@@ -178,7 +178,7 @@ func (pm *pebbleMetrics) start() error {
 			pm.compactInProgressBytes,
 			pm.compactNumInProgress,
 			pm.compactMarkedFiles,
-			pm.l0NumFiles,
+			pm.l0TablesCount,
 		},
 		pm.reportAsyncMetrics,
 	)
@@ -194,10 +194,10 @@ func (pm *pebbleMetrics) reportAsyncMetrics(ctx context.Context) {
 	pm.cacheHits.Observe(ctx, m.BlockCache.Hits, attribute.String("cache", "block"))
 	pm.cacheMisses.Observe(ctx, m.BlockCache.Misses, attribute.String("cache", "block"))
 
-	pm.cacheCount.Observe(ctx, m.TableCache.Count, attribute.String("cache", "table"))
-	pm.cacheSize.Observe(ctx, m.TableCache.Size, attribute.String("cache", "table"))
-	pm.cacheHits.Observe(ctx, m.TableCache.Hits, attribute.String("cache", "table"))
-	pm.cacheMisses.Observe(ctx, m.TableCache.Misses, attribute.String("cache", "table"))
+	pm.cacheCount.Observe(ctx, m.FileCache.TableCount+m.FileCache.BlobFileCount, attribute.String("cache", "file"))
+	pm.cacheSize.Observe(ctx, m.FileCache.Size, attribute.String("cache", "file"))
+	pm.cacheHits.Observe(ctx, m.FileCache.Hits, attribute.String("cache", "file"))
+	pm.cacheMisses.Observe(ctx, m.FileCache.Misses, attribute.String("cache", "file"))
 
 	pm.compactCount.Observe(ctx, int64(m.Compact.Count))
 	pm.compactEstimatedDebt.Observe(ctx, int64(m.Compact.EstimatedDebt))
@@ -205,5 +205,5 @@ func (pm *pebbleMetrics) reportAsyncMetrics(ctx context.Context) {
 	pm.compactNumInProgress.Observe(ctx, int64(m.Compact.NumInProgress))
 	pm.compactMarkedFiles.Observe(ctx, int64(m.Compact.MarkedFiles))
 
-	pm.l0NumFiles.Observe(ctx, int64(m.Levels[0].NumFiles))
+	pm.l0TablesCount.Observe(ctx, int64(m.Levels[0].TablesCount))
 }
