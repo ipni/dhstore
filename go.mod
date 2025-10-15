@@ -1,6 +1,6 @@
 module github.com/ipni/dhstore
 
-go 1.24.6
+go 1.25
 
 require (
 	// Foundation DB golang binding version 7.3.7
