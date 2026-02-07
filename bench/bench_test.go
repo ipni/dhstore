@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cockroachdb/pebble"
-	"github.com/cockroachdb/pebble/bloom"
+	"github.com/cockroachdb/pebble/v2"
+	"github.com/cockroachdb/pebble/v2/bloom"
 	"github.com/ipni/dhstore"
 	dhpebble "github.com/ipni/dhstore/pebble"
 	"github.com/multiformats/go-multihash"
@@ -36,7 +36,7 @@ func newDHStore(b *testing.B) dhstore.DHStore {
 	opts := &pebble.Options{
 		BytesPerSync:                10 << 20, // 10 MiB
 		WALBytesPerSync:             10 << 20, // 10 MiB
-		MaxConcurrentCompactions:    func() int { return 10 },
+		CompactionConcurrencyRange:  func() (int, int) { return 1, 10 },
 		MemTableSize:                64 << 20, // 64 MiB
 		MemTableStopWritesThreshold: 4,
 		LBaseMaxBytes:               64 << 20, // 64 MiB
@@ -48,21 +48,15 @@ func newDHStore(b *testing.B) dhstore.DHStore {
 
 	opts.Experimental.ReadCompactionRate = 10 << 20 // 20 MiB
 
-	const numLevels = 7
-	opts.Levels = make([]pebble.LevelOptions, numLevels)
-	for i := 0; i < numLevels; i++ {
-		l := &opts.Levels[i]
-		l.BlockSize = 32 << 10       // 32 KiB
-		l.IndexBlockSize = 256 << 10 // 256 KiB
-		l.FilterPolicy = bloom.FilterPolicy(10)
-		l.FilterType = pebble.TableFilter
-		if i > 0 {
-			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
-		}
-		l.EnsureDefaults()
+	for i := range opts.Levels {
+		opts.Levels[i].BlockSize = 32 << 10       // 32 KiB
+		opts.Levels[i].IndexBlockSize = 256 << 10 // 256 KiB
+		opts.Levels[i].FilterPolicy = bloom.FilterPolicy(10)
+		opts.Levels[i].FilterType = pebble.TableFilter
 	}
-	opts.Levels[numLevels-1].FilterPolicy = nil
+	opts.Levels[len(opts.Levels)-1].FilterPolicy = nil
 	opts.Cache = pebble.NewCache(1 << 30) // 1 GiB
+	opts.EnsureDefaults()
 	d, err := dhpebble.NewPebbleDHStore(b.TempDir(), opts)
 	require.NoError(b, err)
 	return d
